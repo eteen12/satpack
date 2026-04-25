@@ -1,13 +1,15 @@
 import { searchPlaces } from "@/lib/services/search-places";
 
-const OVERALL_TIMEOUT_MS = 12_000;
+const OVERALL_TIMEOUT_MS = 25_000;
 
 async function readArgs(
   req: Request,
-): Promise<{ q: string | null; limit: number | undefined }> {
+): Promise<{ q: string | null; limit: number | undefined; details: boolean }> {
   const u = new URL(req.url).searchParams;
   let q = u.get("q") ?? u.get("query");
   let limitRaw = u.get("limit");
+  const detailsRaw = u.get("details");
+  let details = detailsRaw === "true" || detailsRaw === "1" || detailsRaw === "yes";
   if ((!q || !limitRaw) && req.method === "POST") {
     try {
       const ct = req.headers.get("content-type") ?? "";
@@ -16,19 +18,21 @@ async function readArgs(
           q?: unknown;
           query?: unknown;
           limit?: unknown;
+          details?: unknown;
         };
         if (!q && typeof body.q === "string") q = body.q;
         if (!q && typeof body.query === "string") q = body.query;
         if (!limitRaw && typeof body.limit === "number") {
           limitRaw = String(body.limit);
         }
+        if (!details && body.details === true) details = true;
       }
     } catch {
       /* fall through */
     }
   }
   const limit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
-  return { q, limit };
+  return { q, limit, details };
 }
 
 const handler = async (req: Request) => {
@@ -36,7 +40,7 @@ const handler = async (req: Request) => {
     return new Response("Not Found", { status: 404 });
   }
   const startedAt = Date.now();
-  const { q, limit } = await readArgs(req);
+  const { q, limit, details } = await readArgs(req);
   if (!q) {
     return Response.json(
       { error: "missing required param: q" },
@@ -55,7 +59,10 @@ const handler = async (req: Request) => {
   );
 
   try {
-    const race = await Promise.race([searchPlaces({ q, limit }), timeout]);
+    const race = await Promise.race([
+      searchPlaces({ q, limit, details }),
+      timeout,
+    ]);
     if (race === "__timeout__") {
       return Response.json(
         {

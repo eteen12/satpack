@@ -45,9 +45,11 @@ const SERVICES: ServiceSpec[] = [
     path: "/api/v1/search/places",
     price_sats: 75,
     description:
-      "search google places by natural-language query — 'landscapers in kelowna' returns up to 20 businesses with names, addresses, ratings, place_ids, geometry, opening hours, photos. raw passthrough of google's text search response.",
-    curlPath: "/api/v1/search/places?q=landscapers+in+kelowna&limit=10",
-    curlPaid: "/api/v1/search/places?q=landscapers+in+kelowna&limit=10",
+      "search google places by natural-language query — 'landscapers in kelowna' returns up to 20 businesses. raw passthrough of google's text search response. add details=true (150 sats) to also fan out place details and merge website + phone into each result — that's the field set you chain into scrape/contact.",
+    curlPath:
+      "/api/v1/search/places?q=landscapers+in+kelowna&limit=10&details=true",
+    curlPaid:
+      "/api/v1/search/places?q=landscapers+in+kelowna&limit=10&details=true",
   },
 ];
 

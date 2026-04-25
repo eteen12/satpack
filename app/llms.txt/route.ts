@@ -50,14 +50,41 @@ no key to manage, no monthly minimum.
   returns: { url, company, emails, phones, social, address,
             found_at, pages_crawled, ms }
 
-- POST ${base}/api/v1/search/places?q={query}&limit={n} — 75 sats
+- POST ${base}/api/v1/search/places?q={query}&limit={n}&details={bool}
+  — 75 sats (text search) or 150 sats (with details=true)
   search google places by natural-language query. e.g.
   "landscapers in kelowna" → up to 20 businesses with names,
   addresses, ratings, place_ids, geometry, opening hours, photos.
   raw passthrough of google's text search api response.
   default limit 10, max 20.
+
+  with details=true: also fetches Place Details for each result
+  in parallel and merges website + formatted_phone_number +
+  international_phone_number into each entry. that's the field
+  set you need for cold outreach. costs 150 sats because it's
+  ~10× the upstream calls.
+
   returns: { query, status, results: PlaceResult[],
-            total_results, next_page_token?, ms }
+            total_results, details_fetched, next_page_token?, ms }
+
+## the full lead-gen recipe
+
+cold outreach in three calls:
+
+1. POST /api/v1/search/places?q=landscapers+in+kelowna&details=true
+   → list of businesses with websites
+   (150 sats)
+
+2. POST /api/v1/scrape/contact?url=<website-from-step-1>
+   → email + phone + socials + company
+   (100 sats per business)
+
+3. POST /api/v1/validate/email?addr=<email-from-step-2>
+   → is this email actually deliverable
+   (5 sats per email)
+
+255 sats per fully-validated cold-outreach lead. compare to
+NeverBounce ($20 minimum) + Hunter ($49/mo) + Apollo ($99/mo).
 
 (GET also works — same query params. agents can pick either.)
 
@@ -107,6 +134,9 @@ prices, and parameters. drop it into your tools config.
 
 ## changelog
 
+- 2026-04-26: places/search now supports details=true (150 sats)
+  for fan-out place details per result — websites + phones merged
+  into each entry. closes the cold-outreach chain. v2.2.
 - 2026-04-26: added search/places (75 sats) for natural-language
   business discovery via google places text search. v2.1.
 - 2026-04-26: cold-outreach pivot. v2.0. three services:

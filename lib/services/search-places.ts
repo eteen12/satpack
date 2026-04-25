@@ -8,6 +8,7 @@
  */
 
 const PER_FETCH_TIMEOUT_MS = 10_000;
+const DETAILS_TIMEOUT_MS = 5_000;
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 20; // one Google page; keeps cost predictable
 
@@ -15,11 +16,18 @@ const MAX_LIMIT = 20; // one Google page; keeps cost predictable
 // the full passthrough — type as Record so we don't lie about completeness.
 export type PlaceResult = Record<string, unknown>;
 
+interface PlaceDetailsFields {
+  website?: string;
+  formatted_phone_number?: string;
+  international_phone_number?: string;
+}
+
 export interface PlacesSearchResult {
   query: string;
   status: string;
   results: PlaceResult[];
   total_results: number;
+  details_fetched: boolean;
   next_page_token?: string;
 }
 
@@ -56,25 +64,89 @@ const FIXTURE_RESULTS: PlaceResult[] = [
   },
 ];
 
+const FIXTURE_DETAILS: Record<string, PlaceDetailsFields> = {
+  "fixture-empire": {
+    website: "https://www.empirelandscaping.ca/",
+    formatted_phone_number: "(250) 555-0142",
+    international_phone_number: "+1 250-555-0142",
+  },
+  "fixture-okanagan-lawn": {
+    website: "https://okanaganyardworks.ca/",
+    formatted_phone_number: "(250) 555-0188",
+    international_phone_number: "+1 250-555-0188",
+  },
+  "fixture-mission-hill": {
+    website: "https://missionhilllandscaping.com/",
+    formatted_phone_number: "(250) 555-0231",
+    international_phone_number: "+1 250-555-0231",
+  },
+};
+
+async function fetchPlaceDetails(
+  placeId: string,
+  apiKey: string,
+): Promise<PlaceDetailsFields | null> {
+  const url = new URL(
+    "https://maps.googleapis.com/maps/api/place/details/json",
+  );
+  url.searchParams.set("place_id", placeId);
+  url.searchParams.set(
+    "fields",
+    "website,formatted_phone_number,international_phone_number",
+  );
+  url.searchParams.set("key", apiKey);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DETAILS_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      status?: string;
+      result?: PlaceDetailsFields;
+    };
+    if (data.status && data.status !== "OK") return null;
+    return data.result ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function searchPlaces(args: {
   q: string;
   limit?: number;
+  details?: boolean;
 }): Promise<PlacesSearchResult> {
   const limit = Math.max(
     1,
     Math.min(MAX_LIMIT, Math.floor(args.limit ?? DEFAULT_LIMIT)),
   );
+  const wantDetails = args.details === true;
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
   if (!apiKey) {
     console.warn(
       "[places] GOOGLE_PLACES_API_KEY not set — returning fixture data",
     );
+    let results = FIXTURE_RESULTS.slice(0, limit);
+    if (wantDetails) {
+      results = results.map((r) => {
+        const id = r.place_id as string | undefined;
+        const det = id ? FIXTURE_DETAILS[id] : undefined;
+        return det ? { ...r, ...det } : r;
+      });
+    }
     return {
       query: args.q,
       status: "FIXTURE",
-      results: FIXTURE_RESULTS.slice(0, limit),
-      total_results: Math.min(FIXTURE_RESULTS.length, limit),
+      results,
+      total_results: results.length,
+      details_fetched: wantDetails,
     };
   }
 
@@ -112,12 +184,30 @@ export async function searchPlaces(args: {
     );
   }
 
-  const results = (data.results ?? []).slice(0, limit);
+  let results = (data.results ?? []).slice(0, limit);
+
+  // Optional second leg: fan out Place Details for each result in parallel,
+  // merge website + phones into the result object. Tolerates per-place
+  // failures — if Details fails for one, that result just lacks the extra
+  // fields. Bounded latency: 5s timeout per call, all parallel.
+  if (wantDetails && results.length > 0) {
+    const enriched = await Promise.all(
+      results.map(async (r) => {
+        const placeId = typeof r.place_id === "string" ? r.place_id : null;
+        if (!placeId) return r;
+        const det = await fetchPlaceDetails(placeId, apiKey);
+        return det ? { ...r, ...det } : r;
+      }),
+    );
+    results = enriched;
+  }
+
   return {
     query: args.q,
     status,
     results,
     total_results: results.length,
+    details_fetched: wantDetails,
     ...(data.next_page_token ? { next_page_token: data.next_page_token } : {}),
   };
 }

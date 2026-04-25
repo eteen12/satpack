@@ -12,7 +12,7 @@ import type { Catalog } from "@/types/catalog";
  */
 export const CATALOG: Catalog = {
   marketplace: "satpack",
-  version: "2.1",
+  version: "2.2",
   services: [
     {
       id: "scrape.email",
@@ -63,18 +63,20 @@ export const CATALOG: Catalog = {
       id: "places.search",
       name: "Google Places Search",
       description:
-        "Search Google Places for businesses by natural-language query. 'landscapers in kelowna' returns up to 20 businesses with names, addresses, ratings, place_ids, types, geometry, and everything else Google's Text Search API returns. Pass-through of Google's response shape.",
+        "Search Google Places for businesses by natural-language query. 'landscapers in kelowna' returns up to 20 businesses with names, addresses, ratings, place_ids, types, geometry, photos, and everything else Google's Text Search API returns. With details=true, also fans out Place Details fetches per result and merges website + formatted_phone_number + international_phone_number — the missing pieces you need for cold outreach. Chain with scrape-contact for the full lead-gen flow.",
       endpoint: "/api/v1/search/places",
       method: "GET",
       price_sats: 75,
       params: {
         q: "natural-language search query (string, required) — e.g. 'landscapers in kelowna'",
-        limit:
-          "max results (integer, optional, default 10, max 20)",
+        limit: "max results (integer, optional, default 10, max 20)",
+        details:
+          "if 'true', also fetch Place Details for each result (website, phone). Bumps price to 150 sats since it costs ~10× more upstream calls. Default false.",
       },
-      example: "/api/v1/search/places?q=landscapers+in+kelowna&limit=10",
+      example:
+        "/api/v1/search/places?q=landscapers+in+kelowna&limit=10&details=true",
       returns:
-        "Object: { query, status, results: PlaceResult[], total_results, next_page_token?, ms }. Each PlaceResult is the raw Google Places Text Search shape.",
+        "Object: { query, status, results: PlaceResult[], total_results, details_fetched, next_page_token?, ms }. Each PlaceResult is the raw Google Places Text Search shape, optionally enriched with website + formatted_phone_number + international_phone_number when details=true.",
     },
   ],
 };
