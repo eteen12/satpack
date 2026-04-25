@@ -2,49 +2,31 @@
 
 @theme inline {
   --color-background: var(--background);
-  --color-background-elevated: var(--background-elevated);
-  --color-background-sunken: var(--background-sunken);
   --color-foreground: var(--foreground);
   --color-foreground-muted: var(--foreground-muted);
   --color-foreground-faint: var(--foreground-faint);
-  --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
-  --color-accent-strong: var(--accent-strong);
-  --color-positive: var(--positive);
-  --color-negative: var(--negative);
+  --color-sats: var(--sats);
+  --color-border: var(--border);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-mono);
+  --font-mono: var(--font-mono);
 }
 
 :root {
-  /* warm off-white paper, not stark — feels editorial */
-  --background: #faf9f5;
-  --background-elevated: #ffffff;
-  --background-sunken: #f3f1ea;
-
-  --foreground: #0a0a0a;
-  --foreground-muted: #57544f;
-  --foreground-faint: #9a968f;
-
-  --border: #e7e3da;
-  --border-strong: #c8c2b3;
-
-  /* Bitcoin orange — the unfakeable color */
-  --accent: #f7931a;
-  --accent-soft: #fdedd5;
-  --accent-strong: #b86a04;
-
-  --positive: #15803d;
-  --negative: #b91c1c;
+  --background: #000000;
+  --foreground: #f0f0f0;
+  --foreground-muted: #888888;
+  --foreground-faint: #555555;
+  --accent: #ff1b6b;
+  --accent-soft: #2a0010;
+  --sats: #f7931a;
+  --border: #1a1a1a;
 }
 
 * {
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 html,
@@ -54,105 +36,62 @@ body {
 }
 
 body {
-  font-family: var(--font-sans);
-  font-feature-settings: "ss01", "cv11", "cv05";
-  /* extremely faint grain — gives the off-white "paper" feel */
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-attachment: fixed;
-}
-
-.font-display {
-  font-family: var(--font-display);
-  font-optical-sizing: auto;
-  font-variation-settings: "opsz" 144, "SOFT" 50;
-  letter-spacing: -0.02em;
-}
-
-.font-display-tight {
-  font-family: var(--font-display);
-  font-optical-sizing: auto;
-  font-variation-settings: "opsz" 144, "SOFT" 30;
-  letter-spacing: -0.035em;
-}
-
-.tnum {
-  font-variant-numeric: tabular-nums;
-}
-
-.eyebrow {
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--foreground-faint);
+  font-feature-settings: "ss02", "cv11";
 }
 
-@keyframes ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(247, 147, 26, 0.55);
-  }
-  100% {
-    box-shadow: 0 0 0 12px rgba(247, 147, 26, 0);
-  }
+::selection {
+  background: var(--accent);
+  color: #000;
 }
 
-.live-dot {
+a {
+  text-decoration: none;
+}
+
+.prompt::before {
+  content: "$ ";
+  color: var(--accent);
+}
+
+.heading::before {
+  content: "> ";
+  color: var(--accent);
+}
+
+.divider {
+  border: 0;
+  border-top: 1px dashed var(--border);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.cursor::after {
+  content: "▊";
+  display: inline-block;
+  margin-left: 0.15em;
+  color: var(--accent);
+  animation: blink 1.05s step-end infinite;
+}
+
+.live-pulse {
   position: relative;
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 9999px;
-  background: var(--accent);
+  background: var(--sats);
+  box-shadow: 0 0 0 0 rgba(247, 147, 26, 0.7);
+  animation: pulse 1.6s ease-out infinite;
 }
-.live-dot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  animation: ring 1.8s ease-out infinite;
-}
-
-@keyframes flash {
+@keyframes pulse {
   0% {
-    background-color: var(--background-elevated);
-    border-color: var(--border);
-  }
-  18% {
-    background-color: var(--accent-soft);
-    border-color: var(--accent);
+    box-shadow: 0 0 0 0 rgba(247, 147, 26, 0.6);
   }
   100% {
-    background-color: var(--background-elevated);
-    border-color: var(--border);
+    box-shadow: 0 0 0 8px rgba(247, 147, 26, 0);
   }
-}
-.flash {
-  animation: flash 900ms ease-out;
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.rise {
-  animation: rise 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.rise-1 {
-  animation-delay: 60ms;
-}
-.rise-2 {
-  animation-delay: 120ms;
-}
-.rise-3 {
-  animation-delay: 180ms;
-}
-.rise-4 {
-  animation-delay: 260ms;
 }

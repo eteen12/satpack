@@ -1,6 +1,5 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { CallRow, DashboardStats } from "@/types/dashboard";
 
 let _client: SupabaseClient | null = null;
 
@@ -110,53 +109,3 @@ export async function getRecentTx(limit = 20): Promise<TxLogRow[]> {
   return (data ?? []) as TxLogRow[];
 }
 
-/**
- * Stats for the legacy /dashboard route. Reads tx_logs, projects into the
- * existing DashboardStats shape so app/dashboard/Live.tsx keeps working
- * without a structural change. Field names are mapped so the dashboard
- * still talks in {service_id, sats_paid, status} terms.
- */
-export async function getDashboardStats(): Promise<DashboardStats | null> {
-  const client = getClient();
-  if (!client) return null;
-
-  const { data, error } = await client
-    .from("tx_logs")
-    .select(
-      "id, service, amount_sats, preimage, input_summary, result_summary, duration_ms, created_at",
-    )
-    .order("created_at", { ascending: false })
-    .limit(500);
-
-  if (error) {
-    console.error("[supabase] read failed", error.message);
-    return { total_sats: 0, total_calls: 0, by_service: [], recent: [] };
-  }
-
-  const rows = (data ?? []) as TxLogRow[];
-  const total_sats = rows.reduce((acc, r) => acc + r.amount_sats, 0);
-  const total_calls = rows.length;
-
-  const byMap = new Map<string, { calls: number; sats: number }>();
-  for (const r of rows) {
-    const cur = byMap.get(r.service) ?? { calls: 0, sats: 0 };
-    cur.calls += 1;
-    cur.sats += r.amount_sats;
-    byMap.set(r.service, cur);
-  }
-  const by_service = Array.from(byMap.entries())
-    .map(([service_id, v]) => ({ service_id, ...v }))
-    .sort((a, b) => b.sats - a.sats);
-
-  // Project to legacy CallRow shape for the existing dashboard UI.
-  const recent: CallRow[] = rows.slice(0, 20).map((r) => ({
-    id: String(r.id),
-    service_id: r.service,
-    sats_paid: r.amount_sats,
-    status: "fulfilled",
-    payment_hash: r.preimage,
-    created_at: r.created_at,
-  }));
-
-  return { total_sats, total_calls, by_service, recent };
-}

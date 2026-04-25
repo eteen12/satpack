@@ -1,27 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
-  subsets: ["latin"],
-  axes: ["opsz", "SOFT"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Satpack — APIs your agents can buy",
+  title: "satpack — pay-per-call utilities for cold outreach",
   description:
-    "Per-call APIs for autonomous AI agents. Pay 10–50 sats per request. Settled instantly over Bitcoin Lightning. No signup, no API keys, no monthly minimums.",
+    "scrape emails, validate emails, extract contacts. paid in lightning. no signup, no api key, no credit card. 🦞",
 };
 
 export default function RootLayout({
@@ -30,13 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full`}
-    >
-      <body className="min-h-full bg-background text-foreground">
-        {children}
-      </body>
+    <html lang="en" className={`${jetbrainsMono.variable} h-full`}>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }
