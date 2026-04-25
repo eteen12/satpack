@@ -1,5 +1,6 @@
 import { withPayment } from "@moneydevkit/nextjs/server";
 import { scrapeContactFromUrl } from "@/lib/services/scrape-contact";
+import { extractPreimage, logTx, toDomain } from "@/lib/supabase";
 
 const PRICE_SATS = 100;
 const OVERALL_TIMEOUT_MS = 15_000;
@@ -58,12 +59,24 @@ const handler = async (req: Request) => {
     setTimeout(() => resolve("__timeout__"), OVERALL_TIMEOUT_MS),
   );
 
+  const domain = toDomain(parsed.toString());
+  const preimage = extractPreimage(req);
+
   try {
     const race = await Promise.race([
       scrapeContactFromUrl(parsed.toString()),
       timeout,
     ]);
     if (race === "__timeout__") {
+      const ms = Date.now() - startedAt;
+      void logTx({
+        service: "scrape-contact",
+        amount_sats: PRICE_SATS,
+        preimage,
+        input_summary: domain,
+        result_summary: `timed out after ${OVERALL_TIMEOUT_MS}ms`,
+        duration_ms: ms,
+      });
       return Response.json(
         {
           url: parsed.toString(),
@@ -77,14 +90,37 @@ const handler = async (req: Request) => {
             found_at: {},
             pages_crawled: [],
           },
-          ms: Date.now() - startedAt,
+          ms,
         },
         { status: 200 },
       );
     }
-    return Response.json({ ...race, ms: Date.now() - startedAt });
+    const ms = Date.now() - startedAt;
+    const socials = Object.keys(race.social).length;
+    void logTx({
+      service: "scrape-contact",
+      amount_sats: PRICE_SATS,
+      preimage,
+      input_summary: domain,
+      result_summary: `${race.emails.length} email${
+        race.emails.length === 1 ? "" : "s"
+      }, ${race.phones.length} phone${
+        race.phones.length === 1 ? "" : "s"
+      }, ${socials} social${socials === 1 ? "" : "s"}`,
+      duration_ms: ms,
+    });
+    return Response.json({ ...race, ms });
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
+    const ms = Date.now() - startedAt;
+    void logTx({
+      service: "scrape-contact",
+      amount_sats: PRICE_SATS,
+      preimage,
+      input_summary: domain,
+      result_summary: `error: ${message.slice(0, 80)}`,
+      duration_ms: ms,
+    });
     return Response.json(
       {
         url: parsed.toString(),
@@ -98,7 +134,7 @@ const handler = async (req: Request) => {
           found_at: {},
           pages_crawled: [],
         },
-        ms: Date.now() - startedAt,
+        ms,
       },
       { status: 200 },
     );

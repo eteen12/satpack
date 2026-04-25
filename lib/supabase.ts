@@ -1,20 +1,13 @@
 import "server-only";
-import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type {
-  CallRow,
-  CallStatus,
-  DashboardStats,
-} from "@/types/dashboard";
+import type { CallRow, DashboardStats } from "@/types/dashboard";
 
 let _client: SupabaseClient | null = null;
 
 function getClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    return null;
-  }
+  if (!url || !serviceKey) return null;
   if (!_client) {
     _client = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -23,88 +16,147 @@ function getClient(): SupabaseClient | null {
   return _client;
 }
 
+export type ServiceId = "scrape-email" | "validate-email" | "scrape-contact";
+
+export interface TxLogRow {
+  id: number;
+  service: ServiceId;
+  amount_sats: number;
+  preimage: string | null;
+  input_summary: string | null;
+  result_summary: string | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
 /**
- * Derive the canonical Lightning payment_hash (sha256 of preimage) from the
- * `Authorization: L402 <macaroon>:<preimage>` header. Returns null if the
- * header is missing or malformed — a logged null preimage means MDK passed
- * us a request through some path that didn't include the standard auth.
+ * Pull the L402 preimage out of the `Authorization: L402 mac:preimage`
+ * header. The preimage is the canonical Lightning proof-of-payment.
+ * Single-use after redemption — safe to store for audit.
  */
-export function extractPaymentHash(req: Request): string | null {
+export function extractPreimage(req: Request): string | null {
   const auth = req.headers.get("authorization");
   if (!auth) return null;
-  const match = auth.match(/^(?:L402|LSAT)\s+([^:]+):([0-9a-fA-F]{64})\s*$/);
-  if (!match) return null;
-  const preimage = match[2].toLowerCase();
-  return createHash("sha256").update(Buffer.from(preimage, "hex")).digest(
-    "hex",
-  );
+  const m = auth.match(/^(?:L402|LSAT)\s+[^:]+:([0-9a-fA-F]{64})\s*$/);
+  return m ? m[1].toLowerCase() : null;
 }
 
 /**
- * Log a paid call to Supabase. Fire-and-forget — we never block the response
- * on logging, and we never throw to the caller. If Supabase isn't configured,
- * a single warn is emitted and the call is dropped.
+ * Reduce a URL or email to just its domain — never store full URLs (they
+ * may contain tokens, query strings, or PII). For an email, take the part
+ * after @. For a URL, take the hostname (strip "www." for cleanliness).
  */
-export async function logCall(args: {
-  service_id: string;
-  sats_paid: number;
-  status: CallStatus;
-  payment_hash: string | null;
+export function toDomain(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.includes("@")) {
+    return trimmed.split("@")[1].toLowerCase();
+  }
+  try {
+    const u = new URL(trimmed);
+    return u.hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return trimmed.slice(0, 60);
+  }
+}
+
+/**
+ * Log a paid call to tx_logs. Fire-and-forget — never blocks the handler
+ * response, never throws to the caller. Silently no-ops when Supabase isn't
+ * configured locally.
+ *
+ * input_summary MUST be redacted to a domain — caller pre-computes via
+ * toDomain(). result_summary is a short human-readable phrase like
+ * "found 3 emails" or "valid: high".
+ */
+export async function logTx(args: {
+  service: ServiceId;
+  amount_sats: number;
+  preimage: string | null;
+  input_summary: string;
+  result_summary: string;
+  duration_ms: number;
 }): Promise<void> {
   const client = getClient();
-  if (!client) {
-    console.warn(
-      "[supabase] not configured (NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing) — skipping log",
-    );
-    return;
-  }
-  const { error } = await client.from("calls").insert({
-    service_id: args.service_id,
-    sats_paid: args.sats_paid,
-    status: args.status,
-    payment_hash: args.payment_hash,
+  if (!client) return;
+  const { error } = await client.from("tx_logs").insert({
+    service: args.service,
+    amount_sats: args.amount_sats,
+    preimage: args.preimage,
+    input_summary: args.input_summary,
+    result_summary: args.result_summary,
+    duration_ms: args.duration_ms,
   });
-  if (error) {
-    console.error("[supabase] insert failed", error.message);
-  }
+  if (error) console.error("[supabase] insert tx_logs failed", error.message);
 }
 
 /**
- * Read-side helper used by the live dashboard. Anon key would also work, but
- * since this module is server-only we just reuse the service-role client.
+ * Read recent tx_logs rows for the live activity feed (Phase H) and the
+ * legacy /dashboard route. Returns up to `limit` rows, newest first.
+ */
+export async function getRecentTx(limit = 20): Promise<TxLogRow[]> {
+  const client = getClient();
+  if (!client) return [];
+  const { data, error } = await client
+    .from("tx_logs")
+    .select(
+      "id, service, amount_sats, preimage, input_summary, result_summary, duration_ms, created_at",
+    )
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error("[supabase] tx_logs read failed", error.message);
+    return [];
+  }
+  return (data ?? []) as TxLogRow[];
+}
+
+/**
+ * Stats for the legacy /dashboard route. Reads tx_logs, projects into the
+ * existing DashboardStats shape so app/dashboard/Live.tsx keeps working
+ * without a structural change. Field names are mapped so the dashboard
+ * still talks in {service_id, sats_paid, status} terms.
  */
 export async function getDashboardStats(): Promise<DashboardStats | null> {
   const client = getClient();
   if (!client) return null;
 
-  const { data: rows, error } = await client
-    .from("calls")
-    .select("id, service_id, sats_paid, status, payment_hash, created_at")
+  const { data, error } = await client
+    .from("tx_logs")
+    .select(
+      "id, service, amount_sats, preimage, input_summary, result_summary, duration_ms, created_at",
+    )
     .order("created_at", { ascending: false })
     .limit(500);
 
   if (error) {
-    // Most common cause: schema hasn't been applied yet (supabase/schema.sql).
-    // Return empty stats so the dashboard renders the "awaiting first call"
-    // empty state instead of an indefinite "loading…" spinner.
     console.error("[supabase] read failed", error.message);
     return { total_sats: 0, total_calls: 0, by_service: [], recent: [] };
   }
-  const all = (rows ?? []) as CallRow[];
-  const fulfilled = all.filter((r) => r.status === "fulfilled");
-  const total_sats = fulfilled.reduce((acc, r) => acc + r.sats_paid, 0);
-  const total_calls = fulfilled.length;
+
+  const rows = (data ?? []) as TxLogRow[];
+  const total_sats = rows.reduce((acc, r) => acc + r.amount_sats, 0);
+  const total_calls = rows.length;
 
   const byMap = new Map<string, { calls: number; sats: number }>();
-  for (const r of fulfilled) {
-    const cur = byMap.get(r.service_id) ?? { calls: 0, sats: 0 };
+  for (const r of rows) {
+    const cur = byMap.get(r.service) ?? { calls: 0, sats: 0 };
     cur.calls += 1;
-    cur.sats += r.sats_paid;
-    byMap.set(r.service_id, cur);
+    cur.sats += r.amount_sats;
+    byMap.set(r.service, cur);
   }
   const by_service = Array.from(byMap.entries())
     .map(([service_id, v]) => ({ service_id, ...v }))
     .sort((a, b) => b.sats - a.sats);
 
-  return { total_sats, total_calls, by_service, recent: all.slice(0, 20) };
+  // Project to legacy CallRow shape for the existing dashboard UI.
+  const recent: CallRow[] = rows.slice(0, 20).map((r) => ({
+    id: String(r.id),
+    service_id: r.service,
+    sats_paid: r.amount_sats,
+    status: "fulfilled",
+    payment_hash: r.preimage,
+    created_at: r.created_at,
+  }));
+
+  return { total_sats, total_calls, by_service, recent };
 }

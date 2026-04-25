@@ -1,5 +1,6 @@
 import { withPayment } from "@moneydevkit/nextjs/server";
 import { validateEmail } from "@/lib/services/validate-email";
+import { extractPreimage, logTx, toDomain } from "@/lib/supabase";
 
 const PRICE_SATS = 5;
 const OVERALL_TIMEOUT_MS = 8_000;
@@ -46,28 +47,60 @@ const handler = async (req: Request) => {
     setTimeout(() => resolve("__timeout__"), OVERALL_TIMEOUT_MS),
   );
 
+  const domain = toDomain(addr);
+  const preimage = extractPreimage(req);
+
   try {
     const race = await Promise.race([validateEmail(addr), timeout]);
     if (race === "__timeout__") {
+      const ms = Date.now() - startedAt;
+      void logTx({
+        service: "validate-email",
+        amount_sats: PRICE_SATS,
+        preimage,
+        input_summary: domain,
+        result_summary: `timed out after ${OVERALL_TIMEOUT_MS}ms`,
+        duration_ms: ms,
+      });
       return Response.json(
         {
           email: addr,
           error: `validation timed out after ${OVERALL_TIMEOUT_MS}ms`,
           partial: { syntax_valid: false, mx_valid: false },
-          ms: Date.now() - startedAt,
+          ms,
         },
         { status: 200 },
       );
     }
-    return Response.json({ ...race, ms: Date.now() - startedAt });
+    const ms = Date.now() - startedAt;
+    void logTx({
+      service: "validate-email",
+      amount_sats: PRICE_SATS,
+      preimage,
+      input_summary: domain,
+      result_summary: `${race.deliverable_guess}${
+        race.disposable ? " · disposable" : ""
+      }${race.role_account ? " · role" : ""}`,
+      duration_ms: ms,
+    });
+    return Response.json({ ...race, ms });
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
+    const ms = Date.now() - startedAt;
+    void logTx({
+      service: "validate-email",
+      amount_sats: PRICE_SATS,
+      preimage,
+      input_summary: domain,
+      result_summary: `error: ${message.slice(0, 80)}`,
+      duration_ms: ms,
+    });
     return Response.json(
       {
         email: addr,
         error: message,
         partial: { syntax_valid: false, mx_valid: false },
-        ms: Date.now() - startedAt,
+        ms,
       },
       { status: 200 },
     );

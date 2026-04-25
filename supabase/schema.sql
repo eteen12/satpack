@@ -2,36 +2,34 @@
 -- Paste this into the Supabase SQL editor (Project -> SQL -> New query)
 -- and run once.
 --
--- One table: `calls` — every L402-paid request gets a row.
--- Columns:
---   id            uuid, generated
---   service_id    one of 'places.search', 'weather.current', 'yelp.search'
---   sats_paid     integer, the price the agent paid (10 / 40 / 50)
---   status        'fulfilled' if the upstream API returned data,
---                 'paid' if payment was taken but upstream failed,
---                 'failed' reserved for future use (eg credential rejected
---                 mid-handler — currently never inserted by the app).
---   payment_hash  hex-encoded SHA-256 of the L402 preimage. Unique per
---                 payment, recoverable from the agent's preimage for
---                 audit. Indexed for dedup if we ever retry-log.
---   created_at    server timestamp
+-- Single table `tx_logs`. Every paid call writes one row. Privacy-by-design:
+-- input_summary stores ONLY the domain (or the email's domain), never the
+-- full URL with query strings or tokens. result_summary is a short human-
+-- readable note ("found 3 emails", "valid: high") for the demo activity
+-- feed and the dashboard.
 --
--- Hackathon scope: no RLS. Service role key writes; anon key reads (for
--- the live dashboard). Public read is fine because the data is already
--- non-sensitive (service_id + sats + timestamp). DO NOT add RLS without
--- also updating the dashboard reader.
+-- Hackathon scope: no RLS. Service-role key writes; anon key reads. Public
+-- read is fine — input_summary is already redacted to just the domain.
 
-create table if not exists calls (
-  id uuid default gen_random_uuid() primary key,
-  service_id text not null,
-  sats_paid integer not null,
-  status text not null check (status in ('paid', 'failed', 'fulfilled')),
-  payment_hash text,
-  created_at timestamptz not null default now()
+drop table if exists calls;  -- legacy table from the v1 marketplace; safe to drop
+
+create table if not exists tx_logs (
+  id              bigint generated always as identity primary key,
+  service         text   not null check (service in (
+                    'scrape-email',
+                    'validate-email',
+                    'scrape-contact'
+                  )),
+  amount_sats     integer not null,
+  preimage        text,                       -- L402 preimage (32-byte hex), single-use
+  input_summary   text,                       -- redacted: domain only
+  result_summary  text,                       -- e.g. "found 3 emails"
+  duration_ms     integer,
+  created_at      timestamptz not null default now()
 );
 
-create index if not exists calls_created_at_desc_idx
-  on calls (created_at desc);
+create index if not exists tx_logs_created_at_desc_idx
+  on tx_logs (created_at desc);
 
-create index if not exists calls_service_id_idx
-  on calls (service_id);
+create index if not exists tx_logs_service_idx
+  on tx_logs (service);

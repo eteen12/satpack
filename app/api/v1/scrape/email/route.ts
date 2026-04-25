@@ -1,5 +1,6 @@
 import { withPayment } from "@moneydevkit/nextjs/server";
 import { scrapeEmailsFromUrl } from "@/lib/services/scrape-email";
+import { extractPreimage, logTx, toDomain } from "@/lib/supabase";
 
 const PRICE_SATS = 50;
 const OVERALL_TIMEOUT_MS = 15_000;
@@ -59,6 +60,9 @@ const handler = async (req: Request) => {
     setTimeout(() => resolve("__timeout__"), OVERALL_TIMEOUT_MS),
   );
 
+  const domain = toDomain(parsed.toString());
+  const preimage = extractPreimage(req);
+
   try {
     const race = await Promise.race([
       scrapeEmailsFromUrl(parsed.toString()),
@@ -66,35 +70,55 @@ const handler = async (req: Request) => {
     ]);
 
     if (race === "__timeout__") {
+      const ms = Date.now() - startedAt;
+      void logTx({
+        service: "scrape-email",
+        amount_sats: PRICE_SATS,
+        preimage,
+        input_summary: domain,
+        result_summary: `timed out after ${OVERALL_TIMEOUT_MS}ms`,
+        duration_ms: ms,
+      });
       return Response.json(
         {
           url: parsed.toString(),
           error: `scrape timed out after ${OVERALL_TIMEOUT_MS}ms — partial result returned`,
-          partial: {
-            emails: [],
-            pages_crawled: [],
-            found_at: {},
-          },
-          ms: Date.now() - startedAt,
+          partial: { emails: [], pages_crawled: [], found_at: {} },
+          ms,
         },
         { status: 200 },
       );
     }
 
-    return Response.json({
-      url: parsed.toString(),
-      ...race,
-      ms: Date.now() - startedAt,
+    const ms = Date.now() - startedAt;
+    void logTx({
+      service: "scrape-email",
+      amount_sats: PRICE_SATS,
+      preimage,
+      input_summary: domain,
+      result_summary: `found ${race.emails.length} email${
+        race.emails.length === 1 ? "" : "s"
+      }`,
+      duration_ms: ms,
     });
+    return Response.json({ url: parsed.toString(), ...race, ms });
   } catch (err) {
-    // Agent paid; agent gets something. 200, not 502.
     const message = err instanceof Error ? err.message : "unknown error";
+    const ms = Date.now() - startedAt;
+    void logTx({
+      service: "scrape-email",
+      amount_sats: PRICE_SATS,
+      preimage,
+      input_summary: domain,
+      result_summary: `error: ${message.slice(0, 80)}`,
+      duration_ms: ms,
+    });
     return Response.json(
       {
         url: parsed.toString(),
         error: message,
         partial: { emails: [], pages_crawled: [], found_at: {} },
-        ms: Date.now() - startedAt,
+        ms,
       },
       { status: 200 },
     );
