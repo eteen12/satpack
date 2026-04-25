@@ -1,72 +1,84 @@
-# Satpack
+# satpack 🦞
 
-> **APIs your agents can buy.** AI agents can't pass KYC. Can't get a Stripe
-> account. Can't sign up for Google Cloud. Satpack lets them pay 10–50 sats
-> per call instead — settled instantly over Bitcoin Lightning.
+> pay-per-call utilities for cold outreach and lead enrichment. paid in bitcoin lightning. **no signup. no api key. no credit card.**
 
-Built for the **Spiral × Hack-Nation "Earn in the Agent Economy"** challenge
-at MIT (April 2026).
+Last week I needed to validate 1,000 cold outreach emails. NeverBounce wanted a signup, a credit card, and a $20 minimum. ZeroBounce asked for my phone number. Hunter said "contact sales." I just wanted to call an endpoint and pay for what I used.
 
-- 🌐 Landing: `/`
-- 📈 Live dashboard: `/dashboard`
-- 📦 Machine-readable catalog: `/api/v1/catalog`
-- 🤖 LLM-friendly index: `/api/v1/llms.txt`
+Now you can. **5 sats per validation. paid in lightning.** No relationship with me, no relationship with the upstream provider, no API key floating around in your `.env`.
 
-## Why Lightning, not Stripe
+Your script. Your sats. Our endpoint.
 
-Stripe's ~50¢ minimum fee makes a 5¢ API call economically impossible.
-Lightning settles a 10-sat invoice in milliseconds for fractions of a cent
-in fees. Per-call pricing has been a fantasy on traditional rails for
-fifteen years; Lightning makes it trivial. **That's the whole reason this
-marketplace exists.**
+Built for the **Spiral × Hack-Nation "Earn in the Agent Economy"** challenge at MIT, April 2026.
 
-## How it works
+---
 
-Satpack is a thin operator on top of a few popular APIs (Google Places, Yelp,
-OpenWeather). I hold the upstream credentials. Agents pay sats per call via
-the [L402 protocol](https://github.com/lightninglabs/L402) — HTTP 402 +
-Bitcoin Lightning + a signed macaroon credential.
+## services
 
-```mermaid
-sequenceDiagram
-  participant A as AI Agent
-  participant S as Satpack (Next.js)
-  participant M as MDK (L402 + LN)
-  participant U as Upstream API<br/>(Google / Yelp / OW)
+| endpoint | price | what it does |
+|---|---|---|
+| `POST /api/v1/scrape/email?url=…` | **50 sats** | scrape email addresses from a webpage + its `/contact`, `/about`, `/team`, `/imprint` pages |
+| `POST /api/v1/validate/email?addr=…` | **5 sats** | syntax + RFC 5321 length + MX lookup + disposable-domain detection. returns a deliverability guess |
+| `POST /api/v1/scrape/contact?url=…` | **100 sats** | superset of the email scraper. emails, phones, social links (linkedin/twitter/instagram/github/facebook), company name, address |
 
-  A->>S: GET /api/v1/services/places/search?q=…
-  S->>M: invoice + macaroon
-  M-->>S: { invoice, macaroon, paymentHash, amountSats }
-  S-->>A: 402 Payment Required
-  A->>M: pay BOLT-11 invoice
-  M-->>A: preimage (proof of payment)
-  A->>S: GET … <br/>Authorization: L402 macaroon:preimage
-  S->>M: verify credential + preimage
-  M-->>S: ok
-  S->>U: real upstream call (with my key)
-  U-->>S: results
-  S-->>A: 200 { data }
-  S-)Supabase: log row { service_id, sats, payment_hash }
+GET also works — same query params. Either form is fine for agents and humans.
+
+---
+
+## payment flow (L402)
+
+Every endpoint returns **HTTP 402** on first call with a Lightning invoice + a signed macaroon. Pay the invoice. Retry with `Authorization: L402 <macaroon>:<preimage>`. Get the data.
+
+```bash
+# 1. challenge — receive a 402 with the invoice + macaroon
+curl -i 'https://satpack.dev/api/v1/scrape/email?url=https://stripe.com'
+
+# 2. pay the BOLT-11 invoice in any lightning wallet (coinos, alby, phoenix, …)
+#    capture the 64-char hex preimage your wallet returns
+
+# 3. retry with the credential
+curl 'https://satpack.dev/api/v1/scrape/email?url=https://stripe.com' \
+  -H 'Authorization: L402 <macaroon>:<preimage>'
+
+# → 200 OK
+# { "url": "...", "emails": [...], "pages_crawled": [...], "found_at": {...}, "ms": 1843 }
 ```
 
-Macaroon/preimage cryptography is fully handled by
-[Money Dev Kit](https://moneydevkit.com) (`@moneydevkit/nextjs`). Each
-service handler is just `withPayment({ amount, currency }, handler)` — the
-plumbing is invisible.
+Credentials are single-use and expire 15 minutes after issuance. If your handler fails after we already verified payment, we still return HTTP 200 with whatever partial data we got — **you paid, you get something.**
 
-## Available services
+---
 
-| ID | Price | Endpoint |
-|---|---|---|
-| `places.search` | 50 sats | `GET /api/v1/services/places/search?q=&near=&limit=` |
-| `weather.current` | 10 sats | `GET /api/v1/services/weather/current?location=` |
-| `yelp.search` | 40 sats | `GET /api/v1/services/yelp/search?term=&location=&limit=` |
+## for agents
 
-All three return clean, agent-friendly JSON. When upstream API keys are not
-configured locally, handlers fall back to fixture data so the dev path is
-never blocked.
+Drop this into your fetch loop. No key required.
 
-## Quick start
+```ts
+const challenge = await fetch("https://satpack.dev/api/v1/scrape/email?url=https://stripe.com");
+const { invoice, macaroon } = await challenge.json();
+const preimage = await wallet.pay(invoice);
+
+const result = await fetch("https://satpack.dev/api/v1/scrape/email?url=https://stripe.com", {
+  headers: { Authorization: `L402 ${macaroon}:${preimage}` },
+});
+const data = await result.json();
+// → { url, emails: [...], pages_crawled, found_at, ms }
+```
+
+Agent-readable index: [`/llms.txt`](https://satpack.dev/llms.txt). Machine-readable catalog: [`/api/v1/catalog`](https://satpack.dev/api/v1/catalog).
+
+---
+
+## tech stack
+
+- **Next.js 16** App Router + TypeScript strict
+- **[Money Dev Kit](https://moneydevkit.com)** (`@moneydevkit/nextjs`) for the L402 paywall — every paid handler is just `withPayment({ amount, currency }, handler)`
+- **Supabase** for the `tx_logs` activity feed (single table, domain-only redaction — never the full URL)
+- **Tailwind v4** + **JetBrains Mono** — pure black, hot pink Spiral accent, no UI library
+- **Cheerio** for HTML parsing, **disposable-email-domains** for the disposable list
+- **Vercel** for hosting (Fluid Compute defaults)
+
+---
+
+## run it locally
 
 ```bash
 git clone https://github.com/eteen12/satpack.git
@@ -75,140 +87,41 @@ npm install
 cp .env.example .env.local
 ```
 
-Then populate `.env.local` (see [Environment](#environment) below) and run:
+You'll need:
+
+1. **MDK credentials.** `npx @moneydevkit/create --webhook-url=$APP_URL`. `APP_URL` must be a publicly reachable URL — MDK's hosted infra calls back to your `/api/mdk` route. For dev: `ngrok http 3000`, paste the https URL into `APP_URL`, run the CLI.
+
+2. **Supabase project.** Create one at supabase.com, paste [`supabase/schema.sql`](./supabase/schema.sql) into the SQL editor. Drop the URL + anon key + service-role key into `.env.local`.
+
+3. **(Optional) NeverBounce or ZeroBounce key** if you want upstream validation on top of the local MX + disposable check. The local heuristics already cover ~80% of upstream value.
 
 ```bash
 npm run dev
+# → http://localhost:3000
 ```
 
-### 1 — Money Dev Kit credentials
+See [`.env.example`](./.env.example) for the full template.
 
-Generate a self-custodial Lightning wallet + access token:
+---
 
-```bash
-npx @moneydevkit/create --webhook-url=$APP_URL
-```
+## philosophy
 
-`$APP_URL` must be a publicly reachable URL — MDK's hosted infrastructure
-calls back to your `/api/mdk` route to spin up the merchant Lightning node.
-For local dev, use ngrok:
+**every signup form is a tax. lightning lets you skip it.**
 
-```bash
-ngrok http 3000   # copy the https URL into APP_URL in .env.local
-```
+Stripe's ~50¢ minimum has made per-call API pricing economically impossible for fifteen years. Lightning settles a 5-sat invoice in milliseconds for fractions of a cent in fees. The economics finally work because the rails finally do — and once they do, an agent gets to skip the entire signup-and-key-management ceremony that exists only because credit cards needed it.
 
-Then re-run the MDK CLI. Use `printf` (not `echo`) when manually setting
-`MDK_ACCESS_TOKEN` / `MDK_MNEMONIC` — trailing newlines silently break MDK
-auth.
+Agents are the new customers. They don't have a phone number. They don't pass KYC. They don't have a Stripe account. Build for them, not around them.
 
-### 2 — Supabase (call logging + dashboard)
+---
 
-Create a project at [supabase.com](https://supabase.com), then in the SQL
-editor paste and run [`supabase/schema.sql`](./supabase/schema.sql). It
-creates one table (`calls`) with two indexes. No RLS — hackathon scope.
+## credits
 
-Copy `Project URL`, `anon` key, and `service_role` key into `.env.local` as
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
-`SUPABASE_SERVICE_ROLE_KEY`. The service-role key is server-only and is
-guarded by a `server-only` import in `lib/supabase.ts` — it cannot leak to
-the browser.
+- built by **[@eteen12](https://github.com/eteen12)**
+- challenge: **[Spiral × Hack-Nation "Earn in the Agent Economy"](https://hack-nation.ai/)**, MIT, April 2026
+- lightning paywall: **[Money Dev Kit](https://moneydevkit.com)** (Spiral)
+- L402 protocol: **[Lightning Labs](https://github.com/lightninglabs/L402)**
+- inspiration: matbalez's universe — [origram.xyz](https://origram.xyz/), [clank.money](https://clank.money/), [unhuman.coffee](https://unhuman.coffee/) 🦞
 
-### 3 — Upstream API keys (optional)
+## license
 
-Each service falls back to fixture data when its key is unset, so you can
-run the full L402 flow end-to-end without any upstream key. To use real
-data:
-
-- `GOOGLE_PLACES_API_KEY` — from [Google Cloud Console](https://console.cloud.google.com/) → Maps Platform → Places API
-- `OPENWEATHER_API_KEY` — from [openweathermap.org/api](https://openweathermap.org/api)
-- `YELP_API_KEY` — from [yelp.com/developers](https://www.yelp.com/developers)
-
-## Environment
-
-```env
-# Lightning paywall (server only)
-MDK_ACCESS_TOKEN=
-MDK_MNEMONIC=
-
-# Public base URL — MDK calls back here on /api/mdk
-APP_URL=
-
-# Supabase — call logging + dashboard
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-
-# Upstream APIs — fixtures used when blank
-GOOGLE_PLACES_API_KEY=
-OPENWEATHER_API_KEY=
-YELP_API_KEY=
-```
-
-See [`.env.example`](./.env.example) for the canonical template.
-
-## Test the L402 flow end-to-end
-
-```bash
-# 1. unauthenticated request returns 402 + invoice
-curl -i 'http://localhost:3000/api/v1/services/places/search?q=coffee&near=MIT'
-
-# 2. pay the invoice from any Lightning wallet
-#    (e.g. coinos.io, Phoenix, Wallet of Satoshi)
-#    capture the 64-char hex preimage the wallet returns
-
-# 3. retry with the credential
-curl -i 'http://localhost:3000/api/v1/services/places/search?q=coffee&near=MIT' \
-  -H 'Authorization: L402 <macaroon-from-step-1>:<preimage-from-step-2>'
-
-# expect HTTP 200 with the JSON results
-```
-
-Visit `/dashboard` while the request is in flight to watch the totals tick
-up live (3-second auto-refresh).
-
-## Tech stack
-
-- **Framework:** Next.js 16 (App Router, Turbopack)
-- **Language:** TypeScript (strict)
-- **Lightning paywall:** [`@moneydevkit/nextjs`](https://www.npmjs.com/package/@moneydevkit/nextjs) — `withPayment({ amount, currency }, handler)`
-- **Database:** Supabase (logging only)
-- **Styling:** Tailwind v4 (no UI library)
-- **Hosting:** Vercel (Fluid Compute defaults)
-
-## Repo layout
-
-```
-app/
-  page.tsx                                 # landing
-  dashboard/page.tsx + Live.tsx            # live dashboard (3s auto-refresh)
-  api/mdk/route.ts                         # MDK unified webhook (re-export)
-  api/v1/catalog/route.ts                  # JSON catalog
-  api/v1/llms.txt/route.ts                 # markdown index for AI agents
-  api/v1/services/places/search/route.ts   # 50 sats
-  api/v1/services/weather/current/route.ts # 10 sats
-  api/v1/services/yelp/search/route.ts     # 40 sats
-  api/dashboard/stats/route.ts             # JSON stats for the dashboard poller
-lib/
-  catalog.ts                               # CATALOG single source of truth
-  supabase.ts                              # server-only client + logCall + extractPaymentHash
-  services/places.ts | weather.ts | yelp.ts  # upstream callers + fixtures
-types/
-  catalog.ts | dashboard.ts                # shared types (no runtime)
-supabase/schema.sql                        # paste into the Supabase SQL editor
-```
-
-## Out of scope (explicitly cut)
-
-- Authentication / user accounts (agents don't have them)
-- Provider onboarding (V2 — third parties listing their own services)
-- Rate limiting, caching, retry queues
-- Tests beyond `curl` smoke checks
-
-## Credits
-
-Built by [@eteen12](https://github.com/eteen12) for the
-[Spiral × Hack-Nation](https://hack-nation.ai/) "Earn in the Agent Economy"
-challenge at MIT, April 2026.
-
-Lightning paywall powered by [Money Dev Kit](https://moneydevkit.com). L402
-protocol by [Lightning Labs](https://github.com/lightninglabs/L402).
+MIT.
