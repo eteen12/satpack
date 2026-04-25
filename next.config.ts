@@ -1,5 +1,4 @@
-import type { NextConfig } from "next";
+import withMdkCheckout, { type NextConfigOverrides } from "@moneydevkit/nextjs/next-plugin";
+const nextConfig: NextConfigOverrides = {};
 
-const nextConfig: NextConfig = {};
-
-export default nextConfig;
+export default withMdkCheckout(nextConfig);

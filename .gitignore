@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# transient backups created by `withMdkCheckout` next-plugin
+*.mdk-backup
 
 # vercel
 .vercel
