@@ -1,17 +1,11 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-
-export interface CallRow {
-  id: string;
-  service_id: string;
-  sats_paid: number;
-  status: "paid" | "failed" | "fulfilled";
-  payment_hash: string | null;
-  created_at: string;
-}
-
-export type CallStatus = CallRow["status"];
+import type {
+  CallRow,
+  CallStatus,
+  DashboardStats,
+} from "@/types/dashboard";
 
 let _client: SupabaseClient | null = null;
 
@@ -76,17 +70,9 @@ export async function logCall(args: {
 }
 
 /**
- * Read-side helpers used by the live dashboard. These run on the server with
- * the anon key would also work, but since this module is server-only we just
- * reuse the service-role client.
+ * Read-side helper used by the live dashboard. Anon key would also work, but
+ * since this module is server-only we just reuse the service-role client.
  */
-export interface DashboardStats {
-  total_sats: number;
-  total_calls: number;
-  by_service: Array<{ service_id: string; calls: number; sats: number }>;
-  recent: CallRow[];
-}
-
 export async function getDashboardStats(): Promise<DashboardStats | null> {
   const client = getClient();
   if (!client) return null;
