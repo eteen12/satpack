@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 
 interface TickerItem {
-  service: "scrape-email" | "validate-email" | "scrape-contact";
+  service:
+    | "scrape-email"
+    | "validate-email"
+    | "scrape-contact"
+    | "places-search";
   amount_sats: number;
   input_summary: string | null;
   result_summary: string | null;
@@ -16,6 +20,7 @@ const VERB: Record<TickerItem["service"], string> = {
   "scrape-email": "scraped",
   "validate-email": "validated",
   "scrape-contact": "enriched",
+  "places-search": "searched",
 };
 
 function relative(iso: string): string {

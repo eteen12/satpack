@@ -15,7 +15,11 @@ function getClient(): SupabaseClient | null {
   return _client;
 }
 
-export type ServiceId = "scrape-email" | "validate-email" | "scrape-contact";
+export type ServiceId =
+  | "scrape-email"
+  | "validate-email"
+  | "scrape-contact"
+  | "places-search";
 
 export interface TxLogRow {
   id: number;

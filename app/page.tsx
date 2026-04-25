@@ -40,6 +40,15 @@ const SERVICES: ServiceSpec[] = [
     curlPath: "/api/v1/scrape/contact?url=https://acme.io",
     curlPaid: "/api/v1/scrape/contact?url=https://acme.io",
   },
+  {
+    method: "POST",
+    path: "/api/v1/search/places",
+    price_sats: 75,
+    description:
+      "search google places by natural-language query — 'landscapers in kelowna' returns up to 20 businesses with names, addresses, ratings, place_ids, geometry, opening hours, photos. raw passthrough of google's text search response.",
+    curlPath: "/api/v1/search/places?q=landscapers+in+kelowna&limit=10",
+    curlPaid: "/api/v1/search/places?q=landscapers+in+kelowna&limit=10",
+  },
 ];
 
 async function getBaseUrl(): Promise<string> {

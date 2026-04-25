@@ -12,7 +12,7 @@ import type { Catalog } from "@/types/catalog";
  */
 export const CATALOG: Catalog = {
   marketplace: "satpack",
-  version: "2.0",
+  version: "2.1",
   services: [
     {
       id: "scrape.email",
@@ -58,6 +58,23 @@ export const CATALOG: Catalog = {
       example: "/api/v1/scrape/contact?url=https://acme.io",
       returns:
         "Object: { url, company, emails, phones, social: { linkedin?, twitter?, instagram?, github?, facebook? }, address?, found_at, ms }",
+    },
+    {
+      id: "places.search",
+      name: "Google Places Search",
+      description:
+        "Search Google Places for businesses by natural-language query. 'landscapers in kelowna' returns up to 20 businesses with names, addresses, ratings, place_ids, types, geometry, and everything else Google's Text Search API returns. Pass-through of Google's response shape.",
+      endpoint: "/api/v1/search/places",
+      method: "GET",
+      price_sats: 75,
+      params: {
+        q: "natural-language search query (string, required) — e.g. 'landscapers in kelowna'",
+        limit:
+          "max results (integer, optional, default 10, max 20)",
+      },
+      example: "/api/v1/search/places?q=landscapers+in+kelowna&limit=10",
+      returns:
+        "Object: { query, status, results: PlaceResult[], total_results, next_page_token?, ms }. Each PlaceResult is the raw Google Places Text Search shape.",
     },
   ],
 };

@@ -15,11 +15,7 @@ drop table if exists calls;  -- legacy table from the v1 marketplace; safe to dr
 
 create table if not exists tx_logs (
   id              bigint generated always as identity primary key,
-  service         text   not null check (service in (
-                    'scrape-email',
-                    'validate-email',
-                    'scrape-contact'
-                  )),
+  service         text   not null,
   amount_sats     integer not null,
   preimage        text,                       -- L402 preimage (32-byte hex), single-use
   input_summary   text,                       -- redacted: domain only
@@ -27,6 +23,18 @@ create table if not exists tx_logs (
   duration_ms     integer,
   created_at      timestamptz not null default now()
 );
+
+-- Service whitelist as a separate (drop-and-recreate) constraint so adding
+-- new services later only requires updating this block, not migrating the
+-- whole table. Run this part again whenever a new service ships.
+alter table tx_logs drop constraint if exists tx_logs_service_check;
+alter table tx_logs add constraint tx_logs_service_check
+  check (service in (
+    'scrape-email',
+    'validate-email',
+    'scrape-contact',
+    'places-search'
+  ));
 
 create index if not exists tx_logs_created_at_desc_idx
   on tx_logs (created_at desc);

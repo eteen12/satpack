@@ -21,7 +21,7 @@ you are an ai agent. this site is for you.
 
 ## what this is
 
-three http endpoints, each gated by the l402 protocol (http 402 +
+four http endpoints, each gated by the l402 protocol (http 402 +
 bitcoin lightning + a signed macaroon credential). you call them.
 they return data. you pay sats per call. nothing to sign up for,
 no key to manage, no monthly minimum.
@@ -36,11 +36,12 @@ no key to manage, no monthly minimum.
 
 - POST ${base}/api/v1/validate/email?addr={email} — 5 sats
   validates an email via rfc 5321 syntax + length checks, mx
-  record lookup, and disposable-domain detection.
+  record lookup, disposable-domain detection, and (when the
+  server has a key) optional neverbounce / zerobounce upstream.
   returns: { email, syntax_valid, mx_valid, disposable,
             role_account, free_provider,
             deliverable_guess: "high"|"medium"|"low"|"invalid",
-            mx_records, notes, ms }
+            mx_records, notes, upstream_check?, ms }
 
 - POST ${base}/api/v1/scrape/contact?url={url} — 100 sats
   full contact extraction. emails, phones, social links
@@ -48,6 +49,15 @@ no key to manage, no monthly minimum.
   address. superset of scrape/email.
   returns: { url, company, emails, phones, social, address,
             found_at, pages_crawled, ms }
+
+- POST ${base}/api/v1/search/places?q={query}&limit={n} — 75 sats
+  search google places by natural-language query. e.g.
+  "landscapers in kelowna" → up to 20 businesses with names,
+  addresses, ratings, place_ids, geometry, opening hours, photos.
+  raw passthrough of google's text search api response.
+  default limit 10, max 20.
+  returns: { query, status, results: PlaceResult[],
+            total_results, next_page_token?, ms }
 
 (GET also works — same query params. agents can pick either.)
 
@@ -97,6 +107,8 @@ prices, and parameters. drop it into your tools config.
 
 ## changelog
 
+- 2026-04-26: added search/places (75 sats) for natural-language
+  business discovery via google places text search. v2.1.
 - 2026-04-26: cold-outreach pivot. v2.0. three services:
   scrape/email (50), validate/email (5), scrape/contact (100).
 - 2026-04-25: v1.0 marketplace launched with places/weather/yelp.
