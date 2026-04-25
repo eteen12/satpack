@@ -246,14 +246,22 @@ function findFollowLinks(html: string, baseUrl: URL, max: number): string[] {
   return Array.from(candidates).slice(0, max);
 }
 
-export async function scrapeEmailsFromUrl(
-  targetUrl: string,
-): Promise<ScrapeEmailResult> {
+export interface CrawledPage {
+  url: string;
+  html: string;
+}
+
+/**
+ * Shared crawler primitive used by both scrape-email and scrape-contact.
+ * BFS the root URL plus up to MAX_PAGES-1 follow-pages matching FOLLOW_PATHS
+ * (/contact, /about, /team, /imprint, etc). Returns each page's HTML in
+ * crawl order. Skips non-HTML responses and silent-failures network errors.
+ */
+export async function crawlPages(targetUrl: string): Promise<CrawledPage[]> {
   const base = new URL(targetUrl);
   const queue: string[] = [base.toString()];
   const visited = new Set<string>();
-  const foundAt: Record<string, string[]> = {};
-  const all = new Set<string>();
+  const out: CrawledPage[] = [];
 
   while (queue.length > 0 && visited.size < MAX_PAGES) {
     const url = queue.shift();
@@ -262,14 +270,8 @@ export async function scrapeEmailsFromUrl(
 
     const html = await fetchHtml(url, PER_FETCH_TIMEOUT_MS);
     if (!html) continue;
+    out.push({ url, html });
 
-    const emails = extractEmailsFromHtml(html);
-    if (emails.length > 0) {
-      foundAt[url] = emails;
-      for (const e of emails) all.add(e);
-    }
-
-    // After the root page, queue up follow-link candidates.
     if (visited.size === 1) {
       const links = findFollowLinks(html, base, MAX_PAGES - 1);
       for (const l of links) {
@@ -277,10 +279,30 @@ export async function scrapeEmailsFromUrl(
       }
     }
   }
+  return out;
+}
+
+export async function scrapeEmailsFromUrl(
+  targetUrl: string,
+): Promise<ScrapeEmailResult> {
+  const pages = await crawlPages(targetUrl);
+  const foundAt: Record<string, string[]> = {};
+  const all = new Set<string>();
+
+  for (const page of pages) {
+    const emails = extractEmailsFromHtml(page.html);
+    if (emails.length > 0) {
+      foundAt[page.url] = emails;
+      for (const e of emails) all.add(e);
+    }
+  }
 
   return {
     emails: Array.from(all).sort(),
-    pages_crawled: Array.from(visited),
+    pages_crawled: pages.map((p) => p.url),
     found_at: foundAt,
   };
 }
+
+// Re-export so scrape-contact can use the same email cleanup pipeline.
+export { extractEmailsFromHtml };
