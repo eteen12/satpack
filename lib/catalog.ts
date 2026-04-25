@@ -1,54 +1,63 @@
 import type { Catalog } from "@/types/catalog";
 
+/**
+ * Single source of truth for the three paid services. Read by:
+ * - GET /api/v1/catalog
+ * - GET /api/v1/llms.txt
+ * - the landing page service cards
+ *
+ * Each service exposes BOTH GET and POST — GET is the agent-friendly
+ * curlable shape, POST is conventional for "do work" actions. They share
+ * the same MDK-paywalled handler.
+ */
 export const CATALOG: Catalog = {
   marketplace: "satpack",
-  version: "1.0",
+  version: "2.0",
   services: [
     {
-      id: "places.search",
-      name: "Google Places Search",
+      id: "scrape.email",
+      name: "Email Scraper",
       description:
-        "Search for businesses, addresses, and points of interest by query and location.",
-      endpoint: "/api/v1/services/places/search",
+        "Scrape email addresses from a webpage. Crawls up to 3 linked pages (/contact, /about, /team, /imprint) and follows mailto: links. Returns deduped addresses with the source page each was found on.",
+      endpoint: "/api/v1/scrape/email",
       method: "GET",
       price_sats: 50,
       params: {
-        q: "search query (string, required) — e.g. 'coffee shops'",
-        near: "location (string, required) — e.g. 'MIT, Cambridge MA'",
-        limit: "max results (int, optional, default 10)",
+        url: "page URL (string, required) — e.g. 'https://stripe.com'",
       },
-      example: "/api/v1/services/places/search?q=coffee&near=MIT&limit=5",
-      returns: "Array of place objects with name, address, rating, hours.",
-    },
-    {
-      id: "weather.current",
-      name: "Current Weather",
-      description: "Real-time weather conditions for any location worldwide.",
-      endpoint: "/api/v1/services/weather/current",
-      method: "GET",
-      price_sats: 10,
-      params: {
-        location:
-          "city name or 'lat,lng' (string, required) — e.g. 'Kelowna,BC'",
-      },
-      example: "/api/v1/services/weather/current?location=Kelowna,BC",
-      returns: "Object with temp_c, conditions, humidity, wind_kph.",
-    },
-    {
-      id: "yelp.search",
-      name: "Yelp Business Search",
-      description: "Search Yelp for businesses with ratings and reviews.",
-      endpoint: "/api/v1/services/yelp/search",
-      method: "GET",
-      price_sats: 40,
-      params: {
-        term: "search term (string, required)",
-        location: "location (string, required)",
-        limit: "max results (int, optional, default 10)",
-      },
-      example: "/api/v1/services/yelp/search?term=ramen&location=Boston",
+      example: "/api/v1/scrape/email?url=https://stripe.com",
       returns:
-        "Array of business objects with name, rating, review_count, price.",
+        "Object: { url, emails: string[], pages_crawled: string[], found_at: Record<page, email[]>, ms }",
+    },
+    {
+      id: "validate.email",
+      name: "Email Validator",
+      description:
+        "Validate an email via syntax + RFC 5321 length checks, MX record lookup, and disposable-domain detection. Returns a deliverability guess (high/medium/low/invalid) without ever sending a probe message.",
+      endpoint: "/api/v1/validate/email",
+      method: "GET",
+      price_sats: 5,
+      params: {
+        addr: "email address (string, required) — e.g. 'ceo@stripe.com'",
+      },
+      example: "/api/v1/validate/email?addr=ceo@stripe.com",
+      returns:
+        "Object: { email, syntax_valid, mx_valid, disposable, deliverable_guess, mx_records }",
+    },
+    {
+      id: "scrape.contact",
+      name: "Contact Scraper",
+      description:
+        "Full contact extraction from a webpage: emails, phone numbers, social links (linkedin, twitter, instagram, github, facebook), company name, and address. Superset of the email scraper.",
+      endpoint: "/api/v1/scrape/contact",
+      method: "GET",
+      price_sats: 100,
+      params: {
+        url: "page URL (string, required) — e.g. 'https://acme.io'",
+      },
+      example: "/api/v1/scrape/contact?url=https://acme.io",
+      returns:
+        "Object: { url, company, emails, phones, social: { linkedin?, twitter?, instagram?, github?, facebook? }, address?, found_at, ms }",
     },
   ],
 };
