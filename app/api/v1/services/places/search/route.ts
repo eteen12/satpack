@@ -1,6 +1,7 @@
+import { withPayment } from "@moneydevkit/nextjs/server";
 import { searchPlaces } from "@/lib/services/places";
 
-export async function GET(req: Request) {
+const handler = async (req: Request) => {
   const url = new URL(req.url);
   const q = url.searchParams.get("q");
   const near = url.searchParams.get("near");
@@ -28,4 +29,9 @@ export async function GET(req: Request) {
     const message = err instanceof Error ? err.message : "unknown error";
     return Response.json({ error: message }, { status: 502 });
   }
-}
+};
+
+export const GET = withPayment(
+  { amount: 50, currency: "SAT" },
+  handler,
+);
