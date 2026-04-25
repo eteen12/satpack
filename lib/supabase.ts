@@ -84,8 +84,11 @@ export async function getDashboardStats(): Promise<DashboardStats | null> {
     .limit(500);
 
   if (error) {
+    // Most common cause: schema hasn't been applied yet (supabase/schema.sql).
+    // Return empty stats so the dashboard renders the "awaiting first call"
+    // empty state instead of an indefinite "loading…" spinner.
     console.error("[supabase] read failed", error.message);
-    return null;
+    return { total_sats: 0, total_calls: 0, by_service: [], recent: [] };
   }
   const all = (rows ?? []) as CallRow[];
   const fulfilled = all.filter((r) => r.status === "fulfilled");
