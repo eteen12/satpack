@@ -1,5 +1,9 @@
 import { withPayment } from "@moneydevkit/nextjs/server";
 import { getCurrentWeather } from "@/lib/services/weather";
+import { extractPaymentHash, logCall } from "@/lib/supabase";
+
+const SERVICE_ID = "weather.current";
+const PRICE_SATS = 10;
 
 const handler = async (req: Request) => {
   const url = new URL(req.url);
@@ -12,16 +16,30 @@ const handler = async (req: Request) => {
     );
   }
 
+  const payment_hash = extractPaymentHash(req);
+  let response: Response;
+  let status: "fulfilled" | "paid" = "fulfilled";
+
   try {
     const result = await getCurrentWeather({ location });
-    return Response.json(result);
+    response = Response.json(result);
   } catch (err) {
+    status = "paid";
     const message = err instanceof Error ? err.message : "unknown error";
-    return Response.json({ error: message }, { status: 502 });
+    response = Response.json({ error: message }, { status: 502 });
   }
+
+  void logCall({
+    service_id: SERVICE_ID,
+    sats_paid: PRICE_SATS,
+    status,
+    payment_hash,
+  });
+
+  return response;
 };
 
 export const GET = withPayment(
-  { amount: 10, currency: "SAT" },
+  { amount: PRICE_SATS, currency: "SAT" },
   handler,
 );
