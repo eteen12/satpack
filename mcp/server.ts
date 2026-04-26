@@ -33,6 +33,7 @@ import { createInterface } from "readline";
 // ── config ─────────────────────────────────────────────────────────────────────
 
 const SATPACK_URL = process.env.SATPACK_URL ?? "http://localhost:3000";
+const COINOS_TOKEN = process.env.COINOS_TOKEN ?? "";
 const OPENCLAW_DIR = join(homedir(), ".openclaw");
 const CSV_PATH = join(OPENCLAW_DIR, "hire_outreach.csv");
 
@@ -149,41 +150,68 @@ type AgentEvent =
   | { type: "done"; leads: Lead[]; summary: string; total_sats: number }
   | { type: "error"; message: string };
 
-// ── call satpack hire endpoint ─────────────────────────────────────────────────
+// ── call satpack hire endpoint (L402 + Coinos payment) ────────────────────────
 
 async function runHire(task: string): Promise<{ leads: Lead[]; summary: string; total_sats: number }> {
-  const res = await fetch(`${SATPACK_URL}/api/v1/dev/agent/hire`, {
+  const body = JSON.stringify({ task });
+  const headers = { "Content-Type": "application/json" };
+
+  // Step 1: request the resource — expect 402
+  const r1 = await fetch(`${SATPACK_URL}/api/v1/hire`, { method: "POST", headers, body });
+
+  if (r1.status !== 402) {
+    const text = await r1.text();
+    throw new Error(`expected 402 from hire endpoint, got ${r1.status}: ${text.slice(0, 200)}`);
+  }
+
+  const payReq = (await r1.json()) as { macaroon: string; invoice: string; paymentHash: string };
+  if (!payReq.macaroon || !payReq.invoice) {
+    throw new Error(`402 response missing macaroon or invoice: ${JSON.stringify(payReq)}`);
+  }
+
+  // Step 2: pay the Lightning invoice via Coinos
+  if (!COINOS_TOKEN) throw new Error("COINOS_TOKEN env var not set — cannot pay invoice");
+
+  const coinosRes = await fetch("https://coinos.io/api/payments", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ task }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${COINOS_TOKEN}` },
+    body: JSON.stringify({ payreq: payReq.invoice }),
   });
 
-  if (!res.ok || !res.body) {
-    throw new Error(`hire endpoint returned HTTP ${res.status}`);
+  if (!coinosRes.ok) {
+    const text = await coinosRes.text();
+    throw new Error(`Coinos payment failed (${coinosRes.status}): ${text.slice(0, 200)}`);
   }
 
-  const reader = (res.body as unknown as AsyncIterable<Uint8Array>)[Symbol.asyncIterator]
-    ? (res.body as unknown as AsyncIterable<Uint8Array>)
-    : (() => { throw new Error("streaming not supported in this environment"); })();
-
-  const dec = new TextDecoder();
-  let buf = "";
-
-  for await (const chunk of reader as AsyncIterable<Uint8Array>) {
-    buf += dec.decode(chunk, { stream: true });
-    const parts = buf.split("\n\n");
-    buf = parts.pop() ?? "";
-    for (const part of parts) {
-      const line = part.trim();
-      if (!line.startsWith("data:")) continue;
-      let ev: AgentEvent;
-      try { ev = JSON.parse(line.slice(5).trim()) as AgentEvent; } catch { continue; }
-      if (ev.type === "done") return { leads: ev.leads, summary: ev.summary, total_sats: ev.total_sats };
-      if (ev.type === "error") throw new Error(ev.message);
-    }
+  const payment = (await coinosRes.json()) as { preimage?: string; ref?: string; id?: string };
+  const preimage = payment.preimage ?? payment.ref;
+  if (!preimage) {
+    throw new Error(`Coinos payment response missing preimage: ${JSON.stringify(payment)}`);
   }
 
-  throw new Error("stream ended without a done event");
+  // Step 3: retry with L402 credential
+  const r2 = await fetch(`${SATPACK_URL}/api/v1/hire`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `L402 ${payReq.macaroon}:${preimage}`,
+    },
+    body,
+  });
+
+  if (!r2.ok) {
+    const text = await r2.text();
+    throw new Error(`hire endpoint returned ${r2.status} after payment: ${text.slice(0, 200)}`);
+  }
+
+  const result = (await r2.json()) as { leads?: Lead[]; summary?: string; total_sats?: number; error?: string };
+  if (result.error) throw new Error(result.error);
+
+  return {
+    leads: result.leads ?? [],
+    summary: result.summary ?? "",
+    total_sats: result.total_sats ?? 0,
+  };
 }
 
 // ── MCP server ─────────────────────────────────────────────────────────────────
