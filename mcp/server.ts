@@ -214,11 +214,144 @@ async function runL402<T>(url: string, bodyJson: string): Promise<T> {
 // ── satpack API helpers ───────────────────────────────────────────────────────
 
 async function runHire(task: string): Promise<{ leads: Lead[]; summary: string; total_sats: number }> {
-  return runL402(`${SATPACK_URL}/api/v1/hire`, JSON.stringify({ task }));
+  // Step 1: create invoice via MDK checkout
+  const invRes = await fetch(`${SATPACK_URL}/api/v1/hire/invoice`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task }),
+  });
+  if (!invRes.ok) {
+    const text = await invRes.text();
+    throw new Error(`invoice creation failed (${invRes.status}): ${text.slice(0, 200)}`);
+  }
+  const { invoice, paymentHash } = await invRes.json() as { invoice: string; paymentHash: string };
+
+  // Step 2: pay with Coinos — no preimage required
+  if (!COINOS_TOKEN) throw new Error("COINOS_TOKEN env var not set — cannot pay invoice");
+  const coinosRes = await fetch("https://coinos.io/api/payments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${COINOS_TOKEN}` },
+    body: JSON.stringify({ payreq: invoice }),
+  });
+  if (!coinosRes.ok) {
+    const text = await coinosRes.text();
+    throw new Error(`Coinos payment failed (${coinosRes.status}): ${text.slice(0, 200)}`);
+  }
+
+  // Step 3: poll until MDK confirms payment (usually <1s, bail after 10s)
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    await new Promise<void>((r) => setTimeout(r, 1_500));
+    const chk = await fetch(`${SATPACK_URL}/api/v1/hire/check?hash=${encodeURIComponent(paymentHash)}`);
+    if (chk.ok && (await chk.json() as { paid: boolean }).paid) break;
+  }
+
+  // Step 4: run — server verifies via MDK checkout, streams SSE events
+  const runRes = await fetch(`${SATPACK_URL}/api/v1/hire/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentHash }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  if (!runRes.ok) {
+    const text = await runRes.text();
+    throw new Error(`hire/run failed (${runRes.status}): ${text.slice(0, 200)}`);
+  }
+
+  // Step 5: consume SSE stream until done/error
+  const reader = runRes.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop()!;
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const evt = JSON.parse(line.slice(6)) as {
+        type: string;
+        leads?: Lead[];
+        summary?: string;
+        total_sats?: number;
+        message?: string;
+      };
+      if (evt.type === "done") {
+        return { leads: evt.leads ?? [], summary: evt.summary ?? "", total_sats: evt.total_sats ?? 0 };
+      }
+      if (evt.type === "error") throw new Error(evt.message ?? "agent error");
+    }
+  }
+  throw new Error("SSE stream ended without a done event");
 }
 
 async function runAgentHire(agentId: string, task: string): Promise<{ leads?: Lead[]; summary?: string; total_sats?: number; [key: string]: unknown }> {
-  return runL402(`${SATPACK_URL}/api/v1/agents/${agentId}/hire`, JSON.stringify({ task }));
+  // Same invoice/run flow as runHire, but with agentId for per-agent pricing
+  const invRes = await fetch(`${SATPACK_URL}/api/v1/hire/invoice`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task, agentId }),
+  });
+  if (!invRes.ok) {
+    const text = await invRes.text();
+    throw new Error(`invoice creation failed (${invRes.status}): ${text.slice(0, 200)}`);
+  }
+  const { invoice, paymentHash } = await invRes.json() as { invoice: string; paymentHash: string };
+
+  if (!COINOS_TOKEN) throw new Error("COINOS_TOKEN env var not set — cannot pay invoice");
+  const coinosRes = await fetch("https://coinos.io/api/payments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${COINOS_TOKEN}` },
+    body: JSON.stringify({ payreq: invoice }),
+  });
+  if (!coinosRes.ok) {
+    const text = await coinosRes.text();
+    throw new Error(`Coinos payment failed (${coinosRes.status}): ${text.slice(0, 200)}`);
+  }
+
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    await new Promise<void>((r) => setTimeout(r, 1_500));
+    const chk = await fetch(`${SATPACK_URL}/api/v1/hire/check?hash=${encodeURIComponent(paymentHash)}`);
+    if (chk.ok && (await chk.json() as { paid: boolean }).paid) break;
+  }
+
+  const runRes = await fetch(`${SATPACK_URL}/api/v1/hire/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentHash }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  if (!runRes.ok) {
+    const text = await runRes.text();
+    throw new Error(`hire/run failed (${runRes.status}): ${text.slice(0, 200)}`);
+  }
+
+  const reader = runRes.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop()!;
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const evt = JSON.parse(line.slice(6)) as {
+        type: string;
+        leads?: Lead[];
+        summary?: string;
+        total_sats?: number;
+        message?: string;
+        [key: string]: unknown;
+      };
+      if (evt.type === "done") return { leads: evt.leads, summary: evt.summary, total_sats: evt.total_sats };
+      if (evt.type === "error") throw new Error(evt.message ?? "agent error");
+    }
+  }
+  throw new Error("SSE stream ended without a done event");
 }
 
 async function listAgentsApi(tag?: string): Promise<AgentListing[]> {
