@@ -21,6 +21,7 @@ function validate(fields: ReturnType<typeof parseFields>) {
   if (fields.description.length > 280) return "description exceeds 280 characters";
   if (!fields.price_sats || fields.price_sats < 1) return "price_sats must be >= 1";
   if (!fields.lightning_address) return "lightning_address is required";
+  if (!fields.endpoint_url) return "endpoint_url is required";
   return null;
 }
 

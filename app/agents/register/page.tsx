@@ -175,17 +175,18 @@ export default function RegisterAgentPage() {
           {/* endpoint url */}
           <div>
             <label htmlFor="endpoint_url" className={labelClass}>
-              endpoint url <span className="text-foreground-faint">(optional)</span>
+              endpoint url <span className="text-accent">*</span>
             </label>
             <input
               id="endpoint_url"
               name="endpoint_url"
               type="url"
+              required
               placeholder="https://your-agent.example.com/run"
               className={inputClass}
             />
             <p className="mt-1 text-[11px] text-foreground-faint">
-              for future external routing. leave blank to use the internal agent loop.
+              POST endpoint that accepts <span className="text-foreground-muted">{"{ task: string }"}</span> and returns <span className="text-foreground-muted">{"{ leads, summary, total_sats }"}</span>.
             </p>
           </div>
 
