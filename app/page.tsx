@@ -4,6 +4,8 @@ import { CodeBlock, CopyButton } from "./CodeBlock";
 
 export const dynamic = "force-dynamic";
 
+// ── data ──────────────────────────────────────────────────────────────────────
+
 interface ServiceSpec {
   name: string;
   method: "GET" | "POST";
@@ -11,7 +13,6 @@ interface ServiceSpec {
   price_sats: number;
   description: string;
   curlPath: string;
-  curlPaid: string;
 }
 
 const SERVICES: ServiceSpec[] = [
@@ -20,66 +21,58 @@ const SERVICES: ServiceSpec[] = [
     method: "GET",
     path: "/api/v1/scrape/email",
     price_sats: 50,
-    description:
-      "Scrapes email addresses from a webpage and up to 3 linked pages (/contact, /about, /team, /imprint). Returns deduped addresses with the source page each was found on.",
+    description: "Scrapes emails from a webpage + up to 3 linked pages (/contact, /about, /team). Returns deduped addresses with source.",
     curlPath: "/api/v1/scrape/email?url=https://stripe.com",
-    curlPaid: "/api/v1/scrape/email?url=https://stripe.com",
   },
   {
     name: "email validator",
     method: "GET",
     path: "/api/v1/validate/email",
     price_sats: 32,
-    description:
-      "Validates an email via syntax + RFC 5321 length checks, MX record lookup, and disposable-domain detection. Returns a deliverability guess — high / medium / low / invalid.",
+    description: "Syntax + RFC 5321 checks, MX record lookup, disposable-domain detection. Returns deliverability guess: high / medium / low / invalid.",
     curlPath: "/api/v1/validate/email?addr=ceo@stripe.com",
-    curlPaid: "/api/v1/validate/email?addr=ceo@stripe.com",
   },
   {
     name: "contact scraper",
     method: "GET",
     path: "/api/v1/scrape/contact",
     price_sats: 100,
-    description:
-      "Full contact extraction from a webpage: emails, phones, social links (LinkedIn, Twitter, GitHub, Instagram, Facebook), company name, and address. Superset of the email scraper.",
+    description: "Full extraction: emails, phones, social links (LinkedIn, Twitter, GitHub, Instagram, Facebook), company name, address.",
     curlPath: "/api/v1/scrape/contact?url=https://acme.io",
-    curlPaid: "/api/v1/scrape/contact?url=https://acme.io",
   },
   {
-    name: "google places search",
+    name: "places search",
     method: "GET",
     path: "/api/v1/search/places",
     price_sats: 75,
-    description:
-      "Search Google Places by natural-language query. 'plumbers in boston' returns up to 20 businesses with names, addresses, ratings, and place IDs. Add details=true (150 sats) to also pull website + phone per result.",
+    description: "Natural-language Google Places search. Add details=true (150 sats) to fan-out website + phone per result.",
     curlPath: "/api/v1/search/places?q=plumbers+in+boston&limit=10&details=true",
-    curlPaid: "/api/v1/search/places?q=plumbers+in+boston&limit=10&details=true",
   },
 ];
+
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 async function getBaseUrl(): Promise<string> {
   if (process.env.APP_URL) return process.env.APP_URL;
   const h = await headers();
   const host = h.get("host") ?? "localhost:3000";
-  const proto =
-    h.get("x-forwarded-proto") ??
-    (host.includes("localhost") ? "http" : "https");
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
   return `${proto}://${host}`;
 }
 
 function LightningBolt({ size = 13 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={Math.round(size * 1.4)}
-      viewBox="0 0 10 14"
-      fill="currentColor"
-      aria-hidden
-    >
+    <svg width={size} height={Math.round(size * 1.4)} viewBox="0 0 10 14" fill="currentColor" aria-hidden>
       <path d="M6 0L0 8h4L3 14l8-9H7L6 0z" />
     </svg>
   );
 }
+
+function Divider() {
+  return <hr className="border-0 border-t border-dashed border-border my-12" />;
+}
+
+// ── page ──────────────────────────────────────────────────────────────────────
 
 export default async function Home() {
   const base = await getBaseUrl();
@@ -88,23 +81,23 @@ export default async function Home() {
       <TopBar />
       <main className="mx-auto max-w-3xl px-5 pb-24 pt-16 sm:px-8">
         <Hero />
-        <hr className="border-0 border-t border-dashed border-border my-12" />
-        <HireAgentCTA />
-        <hr className="border-0 border-t border-dashed border-border my-12" />
+        <Divider />
+        <HireAgent base={base} />
+        <Divider />
         <Activity />
-        <hr className="border-0 border-t border-dashed border-border my-12" />
+        <Divider />
         <Services base={base} />
-        <hr className="border-0 border-t border-dashed border-border my-12" />
+        <Divider />
         <Why />
-        <hr className="border-0 border-t border-dashed border-border my-12" />
-        <Agents base={base} />
+        <Divider />
+        <ForAgents base={base} />
         <Footer />
       </main>
     </>
   );
 }
 
-/* ── top bar ─────────────────────────────────────────────────────────────── */
+// ── top bar ───────────────────────────────────────────────────────────────────
 
 function TopBar() {
   return (
@@ -113,28 +106,22 @@ function TopBar() {
         <span className="text-accent">🦞</span> satpack
       </span>
       <a
-        className="inline-flex items-center gap-1.5 rounded border border-sats/25 bg-sats/5 px-2.5 py-1 text-[11px] uppercase tracking-widest text-sats transition-colors hover:border-sats/40 hover:bg-sats/10"
-        href="https://lightning.network"
-        target="_blank"
-        rel="noreferrer"
+        href="/hire"
+        className="inline-flex items-center gap-1.5 rounded border border-[#00d4ff]/25 bg-[#00d4ff]/5 px-2.5 py-1 text-[11px] uppercase tracking-widest text-[#00d4ff] transition-colors hover:border-[#00d4ff]/40 hover:bg-[#00d4ff]/10"
       >
-        <LightningBolt size={10} />
-        powered by lightning
+        hire agent →
       </a>
     </div>
   );
 }
 
-/* ── hero ────────────────────────────────────────────────────────────────── */
+// ── hero ──────────────────────────────────────────────────────────────────────
 
 function Hero() {
   return (
     <section className="pt-8">
       <h1 className="text-2xl text-foreground sm:text-3xl">
-        satpack{" "}
-        <span aria-hidden className="text-accent">
-          🦞
-        </span>
+        satpack <span aria-hidden className="text-accent">🦞</span>
       </h1>
       <p className="mt-10 text-xl leading-snug text-foreground sm:text-2xl">
         cold outreach utilities
@@ -151,54 +138,113 @@ function Hero() {
   );
 }
 
-/* ── hire agent cta ──────────────────────────────────────────────────────── */
+// ── hire agent — featured section ─────────────────────────────────────────────
 
-function HireAgentCTA() {
+function HireAgent({ base }: { base: string }) {
+  const mcpConfig = `// claude_desktop_config.json  (works with Cursor, OpenClaw, etc.)
+{
+  "mcpServers": {
+    "satpack": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/satpack/mcp/server.ts"],
+      "env": { "SATPACK_URL": "${base}" }
+    }
+  }
+}`;
+
+  const httpExample = `// or call the HTTP endpoint directly
+const res = await fetch("${base}/api/v1/hire", {
+  method: "POST",
+  headers: { "Authorization": "L402 <macaroon>:<preimage>" },
+  body: JSON.stringify({
+    task: "find 5 landscapers in Kelowna and pitch web design"
+  }),
+});
+const { leads, summary } = await res.json();
+// leads: [{ business_name, email, draft_subject, draft_body, ... }]`;
+
   return (
-    <section className="relative overflow-hidden rounded border border-[#252525] bg-[#080808] px-7 py-8">
-      {/* left accent bar */}
-      <div className="absolute inset-y-0 left-0 w-0.5 bg-gradient-to-b from-transparent via-[#00d4ff]/70 to-transparent" />
+    <section>
+      <p className="heading mb-5 text-xs uppercase tracking-widest text-foreground-faint">
+        agent for hire
+      </p>
 
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      {/* main card */}
+      <div className="relative overflow-hidden rounded border border-[#252525] bg-[#080808]">
+        {/* left accent */}
+        <div className="absolute inset-y-0 left-0 w-0.5 bg-gradient-to-b from-transparent via-[#00d4ff]/70 to-transparent" />
+
+        <div className="px-7 py-8">
           <p className="text-[11px] uppercase tracking-widest text-[#00d4ff]/70">
             not an ai agent?
           </p>
-          <p className="mt-2 text-2xl leading-tight tracking-tight text-foreground sm:text-3xl">
+          <h2 className="mt-2 text-2xl leading-tight tracking-tight text-foreground sm:text-3xl">
             hire one.
+          </h2>
+          <p className="mt-3 max-w-lg text-sm leading-relaxed text-foreground-muted">
+            describe your pitch in plain English. the agent searches Google Places,
+            scrapes contact emails, validates deliverability, and drafts personalized
+            outreach — all in one shot, while you watch sats move in real time.
           </p>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-foreground-muted">
-            describe your pitch. the agent finds verified leads, scrapes contact
-            emails, and drafts outreach — while you watch sats move in real time.
-          </p>
-          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-foreground-faint">
-            <span className="inline-flex items-center gap-1">
-              <LightningBolt size={8} />
-              places search · 75 sats
+
+          {/* how it works */}
+          <div className="mt-7 space-y-2">
+            {[
+              { step: "01", label: "places search", desc: "finds businesses matching your target market" },
+              { step: "02", label: "email scraper", desc: "pulls contact emails from each website" },
+              { step: "03", label: "email validator", desc: "confirms deliverability — only keeps high/medium" },
+              { step: "04", label: "draft outreach", desc: "personalizes an email for each verified lead" },
+            ].map(({ step, label, desc }) => (
+              <div key={step} className="flex items-baseline gap-4 text-sm">
+                <span className="shrink-0 font-mono text-[11px] text-[#333]">{step}</span>
+                <span className="shrink-0 text-foreground-faint">{label}</span>
+                <span className="text-foreground-faint text-[#444]">—</span>
+                <span className="text-foreground-faint">{desc}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA row */}
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <a
+              href="/hire"
+              className="group inline-flex items-center gap-2.5 rounded border border-[#00d4ff]/30 bg-[#00d4ff]/8 px-5 py-3 text-sm text-[#00d4ff] transition-all hover:border-[#00d4ff]/60 hover:bg-[#00d4ff]/14"
+            >
+              <LightningBolt size={11} />
+              try it now
+              <span className="text-[10px] text-[#00d4ff]/60 transition-transform duration-150 group-hover:translate-x-0.5">→</span>
+            </a>
+            <span className="inline-flex items-center gap-1.5 text-[12px] text-foreground-faint">
+              <LightningBolt size={9} />
+              1000 sats flat · or use individual tools below
             </span>
-            <span className="text-[#333]">·</span>
-            <span>email scrape · 50 sats</span>
-            <span className="text-[#333]">·</span>
-            <span>validation · 32 sats</span>
           </div>
         </div>
 
-        <a
-          href="/hire"
-          className="group inline-flex shrink-0 items-center gap-2.5 self-start rounded border border-[#00d4ff]/30 bg-[#00d4ff]/8 px-5 py-3 text-sm text-[#00d4ff] transition-all hover:border-[#00d4ff]/60 hover:bg-[#00d4ff]/14 sm:self-auto"
-        >
-          <LightningBolt size={11} />
-          hire agent
-          <span className="text-[10px] text-[#00d4ff]/60 transition-transform duration-150 group-hover:translate-x-0.5">
-            →
-          </span>
-        </a>
+        {/* MCP + HTTP tabs */}
+        <div className="border-t border-[#1a1a1a]">
+          <div className="px-7 py-1.5">
+            <p className="text-[10px] uppercase tracking-widest text-[#333]">
+              wire it to your agent
+            </p>
+          </div>
+          <div className="space-y-3 px-4 pb-5">
+            <div>
+              <CodeBlock label="mcp · claude code · cursor · openclaw">{mcpConfig}</CodeBlock>
+              <p className="mt-1.5 pl-0.5 text-[11px] text-foreground-faint">
+                your agent sees <span className="text-foreground-muted">hire_outreach_agent(task)</span>.
+                results write to <span className="text-foreground-muted">~/.openclaw/hire_outreach.csv</span> on your machine.
+              </p>
+            </div>
+            <CodeBlock label="http · 1000 sats · l402">{httpExample}</CodeBlock>
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-/* ── activity ticker ─────────────────────────────────────────────────────── */
+// ── activity ticker ───────────────────────────────────────────────────────────
 
 function Activity() {
   return (
@@ -217,86 +263,64 @@ function Activity() {
   );
 }
 
-/* ── services ────────────────────────────────────────────────────────────── */
+// ── services — compact grid ───────────────────────────────────────────────────
 
 function Services({ base }: { base: string }) {
   return (
     <section>
-      <p className="heading mb-5 text-xs uppercase tracking-widest text-foreground-faint">
-        services
+      <p className="heading mb-2 text-xs uppercase tracking-widest text-foreground-faint">
+        individual tools
       </p>
-      <div className="flex flex-col gap-3">
+      <p className="mb-5 text-sm text-foreground-faint">
+        use these directly when you want fine-grained control. the hire agent chains them automatically.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
         {SERVICES.map((s) => (
-          <ServiceBlock key={s.path} service={s} base={base} />
+          <ServiceCard key={s.path} service={s} base={base} />
         ))}
       </div>
     </section>
   );
 }
 
-function ServiceBlock({
-  service,
-  base,
-}: {
-  service: ServiceSpec;
-  base: string;
-}) {
-  const challengeCmd = `curl -i ${base}${service.curlPath}`;
-  const paidCmd = `curl ${base}${service.curlPaid} \\\n  -H 'Authorization: L402 <macaroon>:<preimage>'`;
+function ServiceCard({ service, base }: { service: ServiceSpec; base: string }) {
+  const curlCmd = `curl "${base}${service.curlPath}" \\\n  -H 'Authorization: L402 <macaroon>:<preimage>'`;
 
   return (
-    <article className="rounded border border-border bg-[#040404] p-5 transition-colors hover:border-[#2a2a2a]">
-      {/* header row */}
-      <div className="mb-2.5 flex flex-wrap items-start justify-between gap-2.5">
+    <article className="rounded border border-border bg-[#040404] p-4 transition-colors hover:border-[#2a2a2a]">
+      <div className="mb-3 flex items-start justify-between gap-2">
         <div>
           <p className="text-sm text-foreground">{service.name}</p>
-          <p className="mt-1 flex items-center text-[11px] text-foreground-faint">
-            <span className="mr-1.5 inline-block rounded border border-border bg-white/4 px-1 py-px text-[10px] uppercase tracking-widest">
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-foreground-faint">
+            <span className="rounded border border-border bg-white/4 px-1 py-px text-[10px] uppercase tracking-widest">
               {service.method}
             </span>
-            {service.path}
+            <span className="truncate">{service.path}</span>
             <CopyButton text={`${base}${service.path}`} />
           </p>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sats/20 bg-sats/5 px-2.5 py-1 text-xs text-sats">
-          <LightningBolt size={10} />
-          {service.price_sats} sats
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-sats/20 bg-sats/5 px-2 py-0.5 text-[11px] text-sats">
+          <LightningBolt size={8} />
+          {service.price_sats}
         </span>
       </div>
-
-      {/* description */}
-      <p className="mb-4 text-[13px] leading-relaxed text-foreground-muted">
+      <p className="mb-3 text-[12px] leading-relaxed text-foreground-muted">
         {service.description}
       </p>
-
-      {/* collapsible curl steps */}
       <details className="border-t border-border pt-3">
         <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-[11px] uppercase tracking-widest text-foreground-faint transition-colors hover:text-foreground-muted [&::-webkit-details-marker]:hidden">
-          <span className="arrow text-[9px] text-accent transition-transform duration-150">
-            ▸
-          </span>
-          how to call
+          <span className="arrow text-[9px] text-accent transition-transform duration-150">▸</span>
+          curl
         </summary>
-        <div className="mt-3.5 flex flex-col gap-2.5">
-          <div>
-            <CodeBlock label="01 · challenge">{challengeCmd}</CodeBlock>
-            <p className="mt-1.5 pl-0.5 text-[11px] text-foreground-faint">
-              → 402 · lightning invoice + macaroon. pay it.
-            </p>
-          </div>
-          <div>
-            <CodeBlock label="02 · submit proof">{paidCmd}</CodeBlock>
-            <p className="mt-1.5 pl-0.5 text-[11px] text-foreground-faint">
-              → 200 · the data you paid for.
-            </p>
-          </div>
+        <div className="mt-3">
+          <CodeBlock label="with l402">{curlCmd}</CodeBlock>
         </div>
       </details>
     </article>
   );
 }
 
-/* ── why this exists ─────────────────────────────────────────────────────── */
+// ── why this exists ───────────────────────────────────────────────────────────
 
 function Why() {
   return (
@@ -314,7 +338,7 @@ function Why() {
         <p>i just wanted to call an endpoint and pay for what i used.</p>
         <p>
           now you can.{" "}
-          <span className="text-foreground">5 sats per validation</span>. paid
+          <span className="text-foreground">32 sats per validation</span>. paid
           in lightning. no relationship with me, no relationship with the
           upstream provider, no API key floating around in your env.
         </p>
@@ -324,21 +348,19 @@ function Why() {
   );
 }
 
-/* ── for agents ──────────────────────────────────────────────────────────── */
+// ── for agents ────────────────────────────────────────────────────────────────
 
-function Agents({ base }: { base: string }) {
+function ForAgents({ base }: { base: string }) {
   const fetchExample = `// give your agent a bitcoin lightning wallet,
-// then point it at any of these endpoints.
-// example: fetch + a wallet that returns a preimage on pay()
+// then point it at any endpoint. example:
 
-const challenge = await fetch("${base}/api/v1/scrape/email?url=https://stripe.com");
-const { invoice, macaroon } = await challenge.json();
+const res = await fetch("${base}/api/v1/scrape/email?url=https://stripe.com");
+const { invoice, macaroon } = await res.json(); // 402 → pay
 const preimage = await wallet.pay(invoice);
 
-const result = await fetch("${base}/api/v1/scrape/email?url=https://stripe.com", {
+const data = await fetch("${base}/api/v1/scrape/email?url=https://stripe.com", {
   headers: { Authorization: \`L402 \${macaroon}:\${preimage}\` },
-});
-const data = await result.json();
+}).then(r => r.json());
 // -> { url, emails: [...], pages_crawled, found_at, ms }`;
 
   return (
@@ -347,51 +369,32 @@ const data = await result.json();
         for agents
       </p>
       <p className="mb-4 text-sm text-foreground-muted">
-        give your agent a lightning wallet. paste this. no API key needed.
+        give your agent a lightning wallet. no API key needed.
       </p>
       <CodeBlock>{fetchExample}</CodeBlock>
       <p className="mt-4 text-xs text-foreground-faint">
         agent index:{" "}
-        <a className="text-foreground-muted hover:text-accent" href="/llms.txt">
-          /llms.txt
-        </a>{" "}
-        · catalog:{" "}
-        <a
-          className="text-foreground-muted hover:text-accent"
-          href="/api/v1/catalog"
-        >
-          /api/v1/catalog
-        </a>
+        <a className="text-foreground-muted hover:text-accent" href="/llms.txt">/llms.txt</a>
+        {" "}· catalog:{" "}
+        <a className="text-foreground-muted hover:text-accent" href="/api/v1/catalog">/api/v1/catalog</a>
       </p>
     </section>
   );
 }
 
-/* ── footer ──────────────────────────────────────────────────────────────── */
+// ── footer ────────────────────────────────────────────────────────────────────
 
 function Footer() {
   return (
     <footer className="mt-16 border-t border-border pt-8">
       <p className="text-xs text-foreground-faint">
-        <span aria-hidden className="text-accent">
-          🦞
-        </span>{" "}
+        <span aria-hidden className="text-accent">🦞</span>{" "}
         built for{" "}
-        <a
-          className="text-foreground-muted hover:text-accent"
-          href="https://hack-nation.ai/"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a className="text-foreground-muted hover:text-accent" href="https://hack-nation.ai/" target="_blank" rel="noreferrer">
           spiral × hack-nation
         </a>{" "}
         · MIT · April 2026 ·{" "}
-        <a
-          className="text-foreground-muted hover:text-accent"
-          href="https://github.com/eteen12/satpack"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a className="text-foreground-muted hover:text-accent" href="https://github.com/eteen12/satpack" target="_blank" rel="noreferrer">
           github
         </a>
       </p>

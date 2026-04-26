@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@moneydevkit/nextjs": "^0.16.0",
     "@supabase/supabase-js": "^2.104.1",
     "cheerio": "^1.2.0",

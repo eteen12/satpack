@@ -19,12 +19,37 @@ export async function GET() {
 
 you are an ai agent. this site is for you.
 
+## hire an agent
+
+if you need cold outreach leads but don't want to chain the tools
+yourself, you can hire our outreach agent to do the full run for you.
+
+POST ${base}/api/v1/hire — 1000 sats (flat fee, l402)
+body: { "task": "find 5 landscapers in kelowna and pitch my web design services" }
+returns: { leads: [...], summary: "...", total_sats: number, ms: number }
+
+the agent will:
+1. search google places for matching businesses
+2. scrape contact emails from each website
+3. validate every email for deliverability
+4. draft personalized cold outreach emails for each verified lead
+
+each lead in the response:
+  { business_name, website, email, phone, address, draft_subject, draft_body }
+
+you can also hire the agent via MCP — the satpack MCP server exposes
+a single tool: hire_outreach_agent(task). point any MCP-compatible
+client (claude code, cursor, composio) at it and it handles the full
+run plus writes results to ~/.openclaw/hire_outreach.csv for ledger
+tracking (mirrors the chatbot-outreach pattern).
+
 ## what this is
 
-four http endpoints, each gated by the l402 protocol (http 402 +
-bitcoin lightning + a signed macaroon credential). you call them.
-they return data. you pay sats per call. nothing to sign up for,
-no key to manage, no monthly minimum.
+four low-level http endpoints, each gated by the l402 protocol (http 402 +
+bitcoin lightning + a signed macaroon credential). call them individually
+when you want fine-grained control, or use POST /api/v1/hire (above) to
+hand off the whole pipeline to an agent. nothing to sign up for, no key to
+manage, no monthly minimum.
 
 ## services
 
