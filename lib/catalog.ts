@@ -36,7 +36,7 @@ export const CATALOG: Catalog = {
         "Validate an email via syntax + RFC 5321 length checks, MX record lookup, and disposable-domain detection. Returns a deliverability guess (high/medium/low/invalid) without ever sending a probe message.",
       endpoint: "/api/v1/validate/email",
       method: "GET",
-      price_sats: 5,
+      price_sats: 32,
       params: {
         addr: "email address (string, required) — e.g. 'ceo@stripe.com'",
       },

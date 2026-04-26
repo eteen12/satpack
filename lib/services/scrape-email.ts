@@ -125,6 +125,20 @@ const JUNK_DOMAINS = new Set([
   "email.com",
   "test.com",
   "domain.tld",
+  // Tracking / analytics fake-email artifacts. Wix, Sentry, GA4, etc.
+  // embed UUIDs as hash@tracker.com strings that match the email regex
+  // but reach a tracking pixel server, not a human.
+  "sentry-next.wixpress.com",
+  "sentry.wixpress.com",
+  "wixpress.com",
+  "sentry.io",
+  "sentry-next.io",
+  "ingest.sentry.io",
+  "google-analytics.com",
+  "googletagmanager.com",
+  "doubleclick.net",
+  "facebook.com",
+  "fbcdn.net",
 ]);
 
 // Extensions that get caught by the email regex when filenames look like
@@ -150,6 +164,36 @@ function looksLikeJunk(email: string): boolean {
   const domain = lower.slice(at + 1);
   if (JUNK_LOCAL_PARTS.has(local)) return true;
   if (JUNK_DOMAINS.has(domain)) return true;
+  // Filter tracker-domain wildcards too: anything ending in known tracker
+  // suffixes is a beacon, not an inbox.
+  for (const suffix of [
+    ".wixpress.com",
+    ".sentry.io",
+    ".sentry-next.io",
+    ".doubleclick.net",
+    ".google-analytics.com",
+  ]) {
+    if (domain.endsWith(suffix)) return true;
+  }
+  // UUID / hash local parts: 24+ characters of pure lowercase hex are
+  // tracking IDs, not human-readable addresses.
+  if (/^[0-9a-f]{24,}$/.test(local)) return true;
+  // URL-encoded artifacts: emails captured from `%20jesse@…` (the %20 is
+  // an encoded space). Local parts shouldn't contain `%` — drop these,
+  // the clean version (`jesse@…`) will be captured independently anyway.
+  if (local.includes("%")) return true;
+  // ...also catches the residue from the cleanup pass: `20jesse@…` where
+  // the `%` was stripped but the trailing two hex chars remained. If the
+  // local part starts with two hex digits *and* a longer-prefix variant
+  // also exists in the source, prefer the longer one. (We can't see the
+  // sibling here, so use a heuristic: 2-digit numeric prefix on a longer
+  // local is suspicious.)
+  if (/^[0-9a-f]{2}[a-z]/.test(local) && local.length > 5) {
+    // Only flag if local starts with exactly two hex chars — would-be
+    // urlcode residue. Real emails like "20year@…" are short, real names
+    // like "ed@…" don't trigger this.
+    return true;
+  }
   // common placeholder copy: "your@email.com", "info@yourdomain.com"
   if (/^(your|my)/.test(local) && /^(email|domain|company|site|address)/.test(domain)) {
     return true;

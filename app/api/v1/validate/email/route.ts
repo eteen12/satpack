@@ -2,7 +2,7 @@ import { withPayment } from "@moneydevkit/nextjs/server";
 import { validateEmail } from "@/lib/services/validate-email";
 import { extractPreimage, logTx, toDomain } from "@/lib/supabase";
 
-const PRICE_SATS = 5;
+const PRICE_SATS = 32;
 const OVERALL_TIMEOUT_MS = 8_000;
 
 async function readAddr(req: Request): Promise<string | null> {

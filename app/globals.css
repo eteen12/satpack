@@ -19,8 +19,8 @@
   --foreground: #f0f0f0;
   --foreground-muted: #888888;
   --foreground-faint: #555555;
-  --accent: #ff1b6b;
-  --accent-soft: #2a0010;
+  --accent: #fb1b1d;
+  --accent-soft: #fb1b1d;
   --sats: #f7931a;
   --border: #1a1a1a;
 }
@@ -59,11 +59,6 @@ a {
   color: var(--accent);
 }
 
-.divider {
-  border: 0;
-  border-top: 1px dashed var(--border);
-}
-
 @keyframes blink {
   50% {
     opacity: 0;
@@ -84,7 +79,6 @@ a {
   height: 6px;
   border-radius: 9999px;
   background: var(--sats);
-  box-shadow: 0 0 0 0 rgba(247, 147, 26, 0.7);
   animation: pulse 1.6s ease-out infinite;
 }
 @keyframes pulse {
@@ -94,4 +88,9 @@ a {
   100% {
     box-shadow: 0 0 0 8px rgba(247, 147, 26, 0);
   }
+}
+
+/* rotate the ▸ arrow when details is open */
+details[open] .arrow {
+  transform: rotate(90deg);
 }
