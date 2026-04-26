@@ -64,15 +64,15 @@ export default function RegisterAgentPage() {
     <>
       {/* topbar */}
       <div className="fixed top-0 left-0 right-0 z-50 flex h-11 items-center justify-between border-b border-border bg-black/90 px-5 backdrop-blur-sm">
-        <a href="/" className="text-[12px] text-foreground-faint hover:text-foreground-muted transition-colors">
-          <span className="text-accent">🦞</span> satpack
-        </a>
-        <a
-          href="/marketplace"
-          className="text-[11px] uppercase tracking-widest text-foreground-faint hover:text-foreground-muted transition-colors"
-        >
-          ← marketplace
-        </a>
+        <nav className="flex items-center gap-2 text-[12px] text-foreground-faint">
+          <a href="/" className="hover:text-foreground-muted transition-colors">
+            <span className="text-accent">🦞</span>
+          </a>
+          <span>/</span>
+          <a href="/marketplace" className="hover:text-foreground-muted transition-colors">marketplace</a>
+          <span>/</span>
+          <span className="text-foreground-muted">register</span>
+        </nav>
       </div>
 
       <main className="mx-auto max-w-xl px-5 pb-24 pt-20 sm:px-8">

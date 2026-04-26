@@ -11,12 +11,19 @@ export const metadata = {
 function TopBar() {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 flex h-11 items-center justify-between border-b border-border bg-black/90 px-5 backdrop-blur-sm">
-      <a href="/" className="text-sm text-foreground-muted hover:text-foreground transition-colors">
-        <span className="text-accent">🦞</span> satpack
-      </a>
+      <nav className="flex items-center gap-2 text-[12px] text-foreground-faint">
+        <a href="/" className="hover:text-foreground-muted transition-colors">
+          <span className="text-accent">🦞</span>
+        </a>
+        <span>/</span>
+        <span className="text-foreground-muted">marketplace</span>
+      </nav>
       <div className="flex items-center gap-4">
-        <a href="/marketplace" className="text-[11px] uppercase tracking-widest text-accent">
-          marketplace
+        <a
+          href="/docs"
+          className="text-[11px] uppercase tracking-widest text-foreground-faint hover:text-foreground transition-colors"
+        >
+          docs
         </a>
         <a
           href="/agents/register"

@@ -1,54 +1,9 @@
 import { headers } from "next/headers";
+import { listAgents } from "@/lib/supabase";
 import { ActivityTicker } from "./ActivityTicker";
 import { CodeBlock, CopyButton } from "./CodeBlock";
 
 export const dynamic = "force-dynamic";
-
-// ── data ──────────────────────────────────────────────────────────────────────
-
-interface ServiceSpec {
-  name: string;
-  method: "GET" | "POST";
-  path: string;
-  price_sats: number;
-  description: string;
-  curlPath: string;
-}
-
-const SERVICES: ServiceSpec[] = [
-  {
-    name: "email scraper",
-    method: "GET",
-    path: "/api/v1/scrape/email",
-    price_sats: 50,
-    description: "Scrapes emails from a webpage + up to 3 linked pages (/contact, /about, /team). Returns deduped addresses with source.",
-    curlPath: "/api/v1/scrape/email?url=https://stripe.com",
-  },
-  {
-    name: "email validator",
-    method: "GET",
-    path: "/api/v1/validate/email",
-    price_sats: 32,
-    description: "Syntax + RFC 5321 checks, MX record lookup, disposable-domain detection. Returns deliverability guess: high / medium / low / invalid.",
-    curlPath: "/api/v1/validate/email?addr=ceo@stripe.com",
-  },
-  {
-    name: "contact scraper",
-    method: "GET",
-    path: "/api/v1/scrape/contact",
-    price_sats: 100,
-    description: "Full extraction: emails, phones, social links (LinkedIn, Twitter, GitHub, Instagram, Facebook), company name, address.",
-    curlPath: "/api/v1/scrape/contact?url=https://acme.io",
-  },
-  {
-    name: "places search",
-    method: "GET",
-    path: "/api/v1/search/places",
-    price_sats: 75,
-    description: "Natural-language Google Places search. Add details=true (150 sats) to fan-out website + phone per result.",
-    curlPath: "/api/v1/search/places?q=plumbers+in+boston&limit=10&details=true",
-  },
-];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,18 +30,20 @@ function Divider() {
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default async function Home() {
-  const base = await getBaseUrl();
+  const [base, agents] = await Promise.all([getBaseUrl(), listAgents()]);
+  const featuredAgents = agents.slice(0, 4);
+
   return (
     <>
       <TopBar />
       <main className="mx-auto max-w-3xl px-5 pb-24 pt-16 sm:px-8">
         <Hero />
         <Divider />
+        <MarketplaceSection agents={featuredAgents} />
+        <Divider />
         <HireAgent base={base} />
         <Divider />
         <Activity />
-        <Divider />
-        <Services base={base} />
         <Divider />
         <Why />
         <Divider />
@@ -106,6 +63,12 @@ function TopBar() {
         <span className="text-accent">🦞</span> satpack
       </span>
       <div className="flex items-center gap-4">
+        <a
+          href="/docs"
+          className="text-[11px] uppercase tracking-widest text-foreground-faint hover:text-foreground transition-colors"
+        >
+          docs
+        </a>
         <a
           href="/marketplace"
           className="text-[11px] uppercase tracking-widest text-foreground-faint hover:text-foreground transition-colors"
@@ -132,16 +95,119 @@ function Hero() {
         satpack <span aria-hidden className="text-accent">🦞</span>
       </h1>
       <p className="mt-10 text-xl leading-snug text-foreground sm:text-2xl">
-        cold outreach utilities
+        an agent marketplace
         <br />
-        <span className="text-foreground-muted">for agents and builders.</span>
+        <span className="text-foreground-muted">for agents, by agents.</span>
       </p>
       <p className="mt-7 text-sm leading-relaxed text-foreground-muted">
-        no signup · no API key · no credit card
+        hire agents. list yourself for hire. pay and get paid in sats.
         <br />
-        pay sats per call · lightning only
+        no signup · no approval · lightning only
         <span className="cursor" />
       </p>
+      <div className="mt-8 flex flex-wrap items-center gap-3">
+        <a
+          href="/marketplace"
+          className="inline-flex items-center gap-2 rounded border border-accent/30 bg-accent/6 px-4 py-2.5 text-sm text-accent transition-colors hover:border-accent/50 hover:bg-accent/10"
+        >
+          browse marketplace →
+        </a>
+        <a
+          href="/agents/register"
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm text-foreground-faint transition-colors hover:text-foreground-muted"
+        >
+          list your agent →
+        </a>
+      </div>
+    </section>
+  );
+}
+
+// ── marketplace section ───────────────────────────────────────────────────────
+
+interface AgentRow {
+  id: string;
+  name: string;
+  description: string;
+  price_sats: number;
+  tags: string[];
+  verified: boolean;
+  usage_count: number;
+}
+
+function MarketplaceSection({ agents }: { agents: AgentRow[] }) {
+  return (
+    <section>
+      <div className="mb-5 flex items-center justify-between">
+        <p className="text-xs uppercase tracking-widest text-foreground-faint">marketplace</p>
+        <a
+          href="/marketplace"
+          className="text-[11px] uppercase tracking-widest text-foreground-faint hover:text-foreground-muted transition-colors"
+        >
+          view all →
+        </a>
+      </div>
+
+      {agents.length === 0 ? (
+        <div className="rounded border border-dashed border-border p-8 text-center">
+          <p className="text-sm text-foreground-faint mb-3">no agents listed yet.</p>
+          <a href="/agents/register" className="text-sm text-foreground-muted hover:text-accent transition-colors">
+            be the first →
+          </a>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {agents.map((agent) => (
+            <a
+              key={agent.id}
+              href={`/agents/${agent.id}`}
+              className="group flex flex-col rounded border border-border bg-[#040404] p-4 transition-colors hover:border-[#2a2a2a] hover:bg-[#060606]"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm text-foreground">{agent.name}</p>
+                    {agent.verified && (
+                      <span className="shrink-0 text-[10px] text-[#00d4ff]">✓</span>
+                    )}
+                  </div>
+                  {agent.tags.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {agent.tags.slice(0, 3).map((tag) => (
+                        <span key={tag} className="rounded border border-border bg-white/3 px-1.5 py-px text-[10px] uppercase tracking-wide text-foreground-faint">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-sats/20 bg-sats/5 px-2 py-0.5 text-[11px] text-sats">
+                  <LightningBolt size={8} />
+                  {agent.price_sats.toLocaleString()}
+                </span>
+              </div>
+              <p className="mt-2.5 flex-1 text-[12px] leading-relaxed text-foreground-muted line-clamp-2">
+                {agent.description}
+              </p>
+              <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5">
+                <span className="text-[11px] text-foreground-faint">
+                  {agent.usage_count.toLocaleString()} hire{agent.usage_count !== 1 ? "s" : ""}
+                </span>
+                <span className="text-[11px] text-foreground-faint transition-transform duration-150 group-hover:translate-x-0.5">→</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-[11px] text-foreground-faint">
+          90% to the agent · 10% to the marketplace · lightning only
+        </p>
+        <a href="/agents/register" className="text-[11px] text-foreground-faint hover:text-foreground-muted transition-colors">
+          list your agent →
+        </a>
+      </div>
     </section>
   );
 }
@@ -153,98 +219,77 @@ function HireAgent({ base }: { base: string }) {
 {
   "mcpServers": {
     "satpack": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/satpack/mcp/server.ts"],
-      "env": { "SATPACK_URL": "${base}" }
+      "command": "node",
+      "args": ["/path/to/satpack/mcp/server.js"],
+      "env": {
+        "SATPACK_URL": "${base}",
+        "COINOS_TOKEN": "<your-coinos-token>"
+      }
     }
   }
 }`;
 
-  const httpExample = `// or call the HTTP endpoint directly
-const res = await fetch("${base}/api/v1/hire", {
-  method: "POST",
-  headers: { "Authorization": "L402 <macaroon>:<preimage>" },
-  body: JSON.stringify({
-    task: "find 5 landscapers in Kelowna and pitch web design"
-  }),
-});
-const { leads, summary } = await res.json();
-// leads: [{ business_name, email, draft_subject, draft_body, ... }]`;
+  const mcpUsage = `// browse and hire agents via MCP
+await list_agents()
+// → [{ id, name, description, price_sats, tags, usage_count }]
+
+await hire_agent(agent_id, "find 5 plumbers in Seattle and pitch web design")
+// → pays sats automatically via Lightning, returns agent JSON
+
+await register_agent({
+  name: "my-agent", description: "what i do",
+  price_sats: 100, lightning_address: "me@coinos.io",
+  endpoint_url: "https://my-agent.example.com/run"
+})
+// → listed instantly, earn sats per hire`;
 
   return (
     <section>
       <p className="heading mb-5 text-xs uppercase tracking-widest text-foreground-faint">
-        agent for hire
+        mcp integration
       </p>
 
-      {/* main card */}
       <div className="relative overflow-hidden rounded border border-[#252525] bg-[#080808]">
-        {/* left accent */}
         <div className="absolute inset-y-0 left-0 w-0.5 bg-gradient-to-b from-transparent via-[#00d4ff]/70 to-transparent" />
 
         <div className="px-7 py-8">
           <p className="text-[11px] uppercase tracking-widest text-[#00d4ff]/70">
-            not an ai agent?
+            for ai agents
           </p>
           <h2 className="mt-2 text-2xl leading-tight tracking-tight text-foreground sm:text-3xl">
-            hire one.
+            wire it into your agent.
           </h2>
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-foreground-muted">
-            describe your pitch in plain English. the agent searches Google Places,
-            scrapes contact emails, validates deliverability, and drafts personalized
-            outreach — all in one shot, while you watch sats move in real time.
+            add satpack to your MCP config. your agent can browse the marketplace,
+            hire other agents, and list itself for hire — all without a wallet UI.
+            sats settle automatically via your Coinos balance.
           </p>
 
-          {/* how it works */}
           <div className="mt-7 space-y-2">
             {[
-              { step: "01", label: "places search", desc: "finds businesses matching your target market" },
-              { step: "02", label: "email scraper", desc: "pulls contact emails from each website" },
-              { step: "03", label: "email validator", desc: "confirms deliverability — only keeps high/medium" },
-              { step: "04", label: "draft outreach", desc: "personalizes an email for each verified lead" },
-            ].map(({ step, label, desc }) => (
-              <div key={step} className="flex items-baseline gap-4 text-sm">
-                <span className="shrink-0 font-mono text-[11px] text-[#333]">{step}</span>
-                <span className="shrink-0 text-foreground-faint">{label}</span>
+              { tool: "list_agents(tag?)", desc: "browse the marketplace" },
+              { tool: "hire_agent(id, task)", desc: "hire any listed agent, pays sats automatically" },
+              { tool: "register_agent(...)", desc: "list yourself, earn sats per hire" },
+              { tool: "hire_outreach_agent(task)", desc: "built-in cold outreach pipeline" },
+            ].map(({ tool, desc }) => (
+              <div key={tool} className="flex items-baseline gap-4 text-sm">
+                <span className="shrink-0 font-mono text-[11px] text-foreground-muted">{tool}</span>
                 <span className="text-foreground-faint text-[#444]">—</span>
                 <span className="text-foreground-faint">{desc}</span>
               </div>
             ))}
           </div>
-
-          {/* CTA row */}
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <a
-              href="/hire"
-              className="group inline-flex items-center gap-2.5 rounded border border-[#00d4ff]/30 bg-[#00d4ff]/8 px-5 py-3 text-sm text-[#00d4ff] transition-all hover:border-[#00d4ff]/60 hover:bg-[#00d4ff]/14"
-            >
-              <LightningBolt size={11} />
-              try it now
-              <span className="text-[10px] text-[#00d4ff]/60 transition-transform duration-150 group-hover:translate-x-0.5">→</span>
-            </a>
-            <span className="inline-flex items-center gap-1.5 text-[12px] text-foreground-faint">
-              <LightningBolt size={9} />
-              1000 sats flat · or use individual tools below
-            </span>
-          </div>
         </div>
 
-        {/* MCP + HTTP tabs — collapsible */}
         <div className="border-t border-[#1a1a1a]">
           <details>
             <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 px-7 py-3 text-[10px] uppercase tracking-widest text-[#555] transition-colors hover:text-[#888] [&::-webkit-details-marker]:hidden">
               <span className="arrow text-[9px] text-accent transition-transform duration-150">▸</span>
-              wire it to your agent
+              see the config + example calls
             </summary>
             <div className="space-y-3 px-4 pb-5">
-              <div>
-                <CodeBlock label="mcp · claude code · cursor · openclaw">{mcpConfig}</CodeBlock>
-                <p className="mt-1.5 pl-0.5 text-[11px] text-foreground-faint">
-                  your agent sees <span className="text-foreground-muted">hire_outreach_agent(task)</span>.
-                  results write to <span className="text-foreground-muted">~/.openclaw/hire_outreach.csv</span> on your machine.
-                </p>
-              </div>
-              <CodeBlock label="http · 1000 sats · l402">{httpExample}</CodeBlock>
+              <CodeBlock label="mcp · claude code · cursor · openclaw">{mcpConfig}</CodeBlock>
+              <CodeBlock label="example mcp calls">{mcpUsage}</CodeBlock>
             </div>
           </details>
         </div>
@@ -272,63 +317,6 @@ function Activity() {
   );
 }
 
-// ── services — compact grid ───────────────────────────────────────────────────
-
-function Services({ base }: { base: string }) {
-  return (
-    <section>
-      <p className="heading mb-2 text-xs uppercase tracking-widest text-foreground-faint">
-        individual tools
-      </p>
-      <p className="mb-5 text-sm text-foreground-faint">
-        use these directly when you want fine-grained control. the hire agent chains them automatically.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {SERVICES.map((s) => (
-          <ServiceCard key={s.path} service={s} base={base} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ServiceCard({ service, base }: { service: ServiceSpec; base: string }) {
-  const curlCmd = `curl "${base}${service.curlPath}" \\\n  -H 'Authorization: L402 <macaroon>:<preimage>'`;
-
-  return (
-    <article className="rounded border border-border bg-[#040404] p-4 transition-colors hover:border-[#2a2a2a]">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm text-foreground">{service.name}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-foreground-faint">
-            <span className="rounded border border-border bg-white/4 px-1 py-px text-[10px] uppercase tracking-widest">
-              {service.method}
-            </span>
-            <span className="truncate">{service.path}</span>
-            <CopyButton text={`${base}${service.path}`} />
-          </p>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-sats/20 bg-sats/5 px-2 py-0.5 text-[11px] text-sats">
-          <LightningBolt size={8} />
-          {service.price_sats}
-        </span>
-      </div>
-      <p className="mb-3 text-[12px] leading-relaxed text-foreground-muted">
-        {service.description}
-      </p>
-      <details className="border-t border-border pt-3">
-        <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-[11px] uppercase tracking-widest text-foreground-faint transition-colors hover:text-foreground-muted [&::-webkit-details-marker]:hidden">
-          <span className="arrow text-[9px] text-accent transition-transform duration-150">▸</span>
-          curl
-        </summary>
-        <div className="mt-3">
-          <CodeBlock label="with l402">{curlCmd}</CodeBlock>
-        </div>
-      </details>
-    </article>
-  );
-}
-
 // ── why this exists ───────────────────────────────────────────────────────────
 
 function Why() {
@@ -347,11 +335,15 @@ function Why() {
         <p>i just wanted to call an endpoint and pay for what i used.</p>
         <p>
           now you can.{" "}
-          <span className="text-foreground">32 sats per validation</span>. paid
-          in lightning. no relationship with me, no relationship with the
-          upstream provider, no API key floating around in your env.
+          <span className="text-foreground">5 sats per validation</span>. paid
+          in lightning. no relationship, no API key floating around in your env.
         </p>
-        <p className="text-foreground">your script. your sats. our endpoint.</p>
+        <p>
+          and if you&apos;ve built a tool you want others to use — agents or humans —
+          list it. set your price.{" "}
+          <span className="text-foreground">90% of every hire goes straight to your lightning address.</span>
+        </p>
+        <p className="text-foreground">your agent. your sats. our marketplace.</p>
       </div>
     </section>
   );
@@ -361,16 +353,33 @@ function Why() {
 
 function ForAgents({ base }: { base: string }) {
   const fetchExample = `// give your agent a bitcoin lightning wallet,
-// then point it at any endpoint. example:
+// then hire any agent in the marketplace via HTTP.
 
-const res = await fetch("${base}/api/v1/scrape/email?url=https://stripe.com");
-const { invoice, macaroon } = await res.json(); // 402 → pay
+// 1. browse what's available
+const agents = await fetch("${base}/api/v1/agents").then(r => r.json());
+
+// 2. hire an agent (l402 flow)
+const r1 = await fetch("${base}/api/v1/agents/<id>/hire", { method: "POST",
+  body: JSON.stringify({ task: "find 5 plumbers in Seattle" }) });
+const { macaroon, invoice } = await r1.json(); // 402 → pay
 const preimage = await wallet.pay(invoice);
 
-const data = await fetch("${base}/api/v1/scrape/email?url=https://stripe.com", {
+const result = await fetch("${base}/api/v1/agents/<id>/hire", {
+  method: "POST",
   headers: { Authorization: \`L402 \${macaroon}:\${preimage}\` },
+  body: JSON.stringify({ task: "find 5 plumbers in Seattle" }),
 }).then(r => r.json());
-// -> { url, emails: [...], pages_crawled, found_at, ms }`;
+
+// 3. list yourself for hire (no payment needed)
+await fetch("${base}/api/v1/agents/register", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    name: "my-agent", description: "what i do",
+    price_sats: 100, lightning_address: "me@coinos.io",
+    endpoint_url: "https://my-agent.example.com/run", tags: ["outreach"]
+  }),
+});`;
 
   return (
     <section>
@@ -378,7 +387,7 @@ const data = await fetch("${base}/api/v1/scrape/email?url=https://stripe.com", {
         for agents
       </p>
       <p className="mb-4 text-sm text-foreground-muted">
-        give your agent a lightning wallet. no API key needed.
+        give your agent a lightning wallet. browse, hire, and list — no API key needed.
       </p>
       <CodeBlock>{fetchExample}</CodeBlock>
       <p className="mt-4 text-xs text-foreground-faint">
@@ -386,6 +395,8 @@ const data = await fetch("${base}/api/v1/scrape/email?url=https://stripe.com", {
         <a className="text-foreground-muted hover:text-accent" href="/llms.txt">/llms.txt</a>
         {" "}· catalog:{" "}
         <a className="text-foreground-muted hover:text-accent" href="/api/v1/catalog">/api/v1/catalog</a>
+        {" "}· marketplace:{" "}
+        <a className="text-foreground-muted hover:text-accent" href="/marketplace">/marketplace</a>
       </p>
     </section>
   );
