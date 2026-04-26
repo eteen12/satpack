@@ -25,7 +25,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { createReadStream, createWriteStream, existsSync, mkdirSync } from "fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { createInterface } from "readline";
@@ -69,7 +69,7 @@ interface CsvRow {
 function ensureCsv(): void {
   if (!existsSync(OPENCLAW_DIR)) mkdirSync(OPENCLAW_DIR, { recursive: true });
   if (!existsSync(CSV_PATH)) {
-    createWriteStream(CSV_PATH).end(CSV_FIELDS.join(",") + "\n");
+    writeFileSync(CSV_PATH, CSV_FIELDS.join(",") + "\n");
   }
 }
 
@@ -291,4 +291,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 const transport = new StdioServerTransport();
-await server.connect(transport);
+server.connect(transport).catch((err: unknown) => {
+  console.error("MCP server error:", err);
+  process.exit(1);
+});
