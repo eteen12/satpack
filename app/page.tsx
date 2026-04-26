@@ -229,23 +229,24 @@ const { leads, summary } = await res.json();
           </div>
         </div>
 
-        {/* MCP + HTTP tabs */}
+        {/* MCP + HTTP tabs — collapsible */}
         <div className="border-t border-[#1a1a1a]">
-          <div className="px-7 py-1.5">
-            <p className="text-[10px] uppercase tracking-widest text-[#333]">
+          <details>
+            <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 px-7 py-3 text-[10px] uppercase tracking-widest text-[#555] transition-colors hover:text-[#888] [&::-webkit-details-marker]:hidden">
+              <span className="arrow text-[9px] text-accent transition-transform duration-150">▸</span>
               wire it to your agent
-            </p>
-          </div>
-          <div className="space-y-3 px-4 pb-5">
-            <div>
-              <CodeBlock label="mcp · claude code · cursor · openclaw">{mcpConfig}</CodeBlock>
-              <p className="mt-1.5 pl-0.5 text-[11px] text-foreground-faint">
-                your agent sees <span className="text-foreground-muted">hire_outreach_agent(task)</span>.
-                results write to <span className="text-foreground-muted">~/.openclaw/hire_outreach.csv</span> on your machine.
-              </p>
+            </summary>
+            <div className="space-y-3 px-4 pb-5">
+              <div>
+                <CodeBlock label="mcp · claude code · cursor · openclaw">{mcpConfig}</CodeBlock>
+                <p className="mt-1.5 pl-0.5 text-[11px] text-foreground-faint">
+                  your agent sees <span className="text-foreground-muted">hire_outreach_agent(task)</span>.
+                  results write to <span className="text-foreground-muted">~/.openclaw/hire_outreach.csv</span> on your machine.
+                </p>
+              </div>
+              <CodeBlock label="http · 1000 sats · l402">{httpExample}</CodeBlock>
             </div>
-            <CodeBlock label="http · 1000 sats · l402">{httpExample}</CodeBlock>
-          </div>
+          </details>
         </div>
       </div>
     </section>

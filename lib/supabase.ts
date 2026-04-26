@@ -101,9 +101,12 @@ export interface HireInvoiceRow {
   checkout_id: string;
   task: string;
   used: boolean;
+  agent_id: string | null;
 }
 
-export async function insertHireInvoice(row: Omit<HireInvoiceRow, "used">): Promise<void> {
+export async function insertHireInvoice(
+  row: Omit<HireInvoiceRow, "used">,
+): Promise<void> {
   const client = getClient();
   if (!client) return;
   const { error } = await client.from("hire_invoices").insert(row);
@@ -115,7 +118,7 @@ export async function getHireInvoice(paymentHash: string): Promise<HireInvoiceRo
   if (!client) return null;
   const { data, error } = await client
     .from("hire_invoices")
-    .select("payment_hash, checkout_id, task, used")
+    .select("payment_hash, checkout_id, task, used, agent_id")
     .eq("payment_hash", paymentHash)
     .single();
   if (error) return null;

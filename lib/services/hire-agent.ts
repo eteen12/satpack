@@ -172,7 +172,7 @@ async function execTool(
 
 type Emit = (e: AgentEvent) => void;
 
-export async function runHireAgent(task: string, emit: Emit): Promise<void> {
+export async function runHireAgent(task: string, emit: Emit, systemPrefix?: string): Promise<void> {
   const apiKey = process.env.AI_API_KEY;
   if (!apiKey) { emit({ type: "error", message: "AI_API_KEY not set" }); return; }
 
@@ -184,8 +184,9 @@ export async function runHireAgent(task: string, emit: Emit): Promise<void> {
   const deadline = Date.now() + HARD_TIMEOUT_MS;
   let totalSats = 0;
 
+  const systemContent = systemPrefix ? `${systemPrefix}\n\n${SYSTEM}` : SYSTEM;
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM },
+    { role: "system", content: systemContent },
     { role: "user", content: task },
   ];
 

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { AgentEvent, Lead } from "@/lib/services/hire-agent";
+import type { AgentRow } from "@/lib/supabase";
 
 // ── types ──────────────────────────────────────────────────────────────────────
 
@@ -246,11 +247,13 @@ function RunView({ phase, result }: { phase: PayPhase["stage"]; result: RunResul
 
 // ── main component ─────────────────────────────────────────────────────────────
 
-export function HireChat() {
+export function HireChat({ agent }: { agent: AgentRow | null }) {
   const [input, setInput] = useState("");
   const [task, setTask] = useState("");
   const [phase, setPhase] = useState<PayPhase>({ stage: "idle" });
   const [result, setResult] = useState<RunResult>({ events: [], leads: [], totalSats: 0, summary: "" });
+
+  const priceSats = agent?.price_sats ?? 1000;
 
   const evtIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -372,7 +375,7 @@ export function HireChat() {
       const res = await fetch("/api/v1/hire/invoice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task: text }),
+        body: JSON.stringify({ task: text, agentId: agent?.id ?? null }),
       });
       const data = await res.json() as { invoice?: string; paymentHash?: string; amountSats?: number; error?: string };
 
@@ -412,24 +415,43 @@ export function HireChat() {
         {phase.stage === "idle" && (
           <div className="flex h-full flex-col items-center justify-center px-5 pb-4 text-center">
             <p className="mb-4 text-4xl">🦞</p>
-            <h1 className="text-2xl text-[#e0e0e0]">hire an agent</h1>
-            <p className="mt-3 max-w-md text-sm leading-relaxed text-[#666]">
-              describe who you want to reach and your pitch. pay 1000 sats,
-              the agent finds verified leads and drafts outreach.
-            </p>
-            <div className="mt-8 flex w-full max-w-lg flex-col gap-2">
-              {EXAMPLES.map((ex) => (
-                <button
-                  key={ex}
-                  onClick={() => { setInput(ex); setTimeout(() => { autoResize(); textareaRef.current?.focus(); }, 20); }}
-                  className="rounded border border-[#1a1a1a] bg-[#050505] px-4 py-2.5 text-left text-sm text-[#666] transition-colors hover:border-[#252525] hover:text-[#888]"
-                >
-                  &ldquo;{ex}&rdquo;
-                </button>
-              ))}
-            </div>
+            {agent ? (
+              <>
+                <p className="text-[11px] uppercase tracking-widest text-[#555]">hiring</p>
+                <h1 className="mt-1 text-2xl text-[#e0e0e0]">{agent.name}</h1>
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-[#666]">{agent.description}</p>
+                {agent.tags.length > 0 && (
+                  <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                    {agent.tags.map((t) => (
+                      <span key={t} className="rounded border border-[#1a1a1a] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[#444]">{t}</span>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl text-[#e0e0e0]">hire an agent</h1>
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-[#666]">
+                  describe who you want to reach and your pitch. pay {priceSats} sats,
+                  the agent finds verified leads and drafts outreach.
+                </p>
+              </>
+            )}
+            {!agent && (
+              <div className="mt-8 flex w-full max-w-lg flex-col gap-2">
+                {EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    onClick={() => { setInput(ex); setTimeout(() => { autoResize(); textareaRef.current?.focus(); }, 20); }}
+                    className="rounded border border-[#1a1a1a] bg-[#050505] px-4 py-2.5 text-left text-sm text-[#666] transition-colors hover:border-[#252525] hover:text-[#888]"
+                  >
+                    &ldquo;{ex}&rdquo;
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="mt-6 text-[11px] text-[#333]">
-              1000 sats flat · places search + email scrape + validation + outreach drafts
+              {priceSats} sats · lightning only
             </p>
           </div>
         )}
@@ -518,7 +540,7 @@ export function HireChat() {
                   pay &amp; run
                 </button>
               </div>
-              <p className="mt-2 text-center text-[11px] text-[#2e2e2e]">⌘↵ · 1000 sats</p>
+              <p className="mt-2 text-center text-[11px] text-[#2e2e2e]">⌘↵ · {priceSats} sats</p>
             </>
           ) : (
             <div className="flex items-center justify-between">
