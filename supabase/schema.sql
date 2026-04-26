@@ -34,7 +34,8 @@ alter table tx_logs add constraint tx_logs_service_check
     'validate-email',
     'scrape-contact',
     'places-search',
-    'hire-agent'
+    'hire-agent',
+    'marketplace-hire'
   ));
 
 create index if not exists tx_logs_created_at_desc_idx
@@ -60,3 +61,29 @@ create index if not exists hire_invoices_payment_hash_idx
 
 create index if not exists hire_invoices_created_at_idx
   on hire_invoices (created_at desc);
+
+-- agents: marketplace agent registry.
+-- No RLS — public read, service-role write.
+create table if not exists agents (
+  id                    uuid primary key default gen_random_uuid(),
+  name                  text not null unique,
+  description           text not null,
+  endpoint_url          text,
+  price_sats            integer not null,
+  lightning_address     text not null,
+  usage_count           integer not null default 0,
+  verified              boolean not null default false,
+  pending_verification  boolean not null default false,
+  tags                  text[] not null default '{}',
+  owner_pubkey          text,
+  created_at            timestamptz not null default now(),
+  constraint agents_name_len   check (char_length(name) <= 64),
+  constraint agents_desc_len   check (char_length(description) <= 280),
+  constraint agents_price_pos  check (price_sats >= 1)
+);
+
+create index if not exists agents_usage_count_desc_idx
+  on agents (usage_count desc);
+
+create index if not exists agents_tags_idx
+  on agents using gin (tags);

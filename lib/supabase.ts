@@ -20,7 +20,8 @@ export type ServiceId =
   | "validate-email"
   | "scrape-contact"
   | "places-search"
-  | "hire-agent";
+  | "hire-agent"
+  | "marketplace-hire";
 
 export interface TxLogRow {
   id: number;
@@ -130,6 +131,87 @@ export async function markHireInvoiceUsed(paymentHash: string): Promise<boolean>
     .eq("payment_hash", paymentHash)
     .eq("used", false);
   return !error;
+}
+
+// ── agents helpers ────────────────────────────────────────────────────────────
+
+export interface AgentRow {
+  id: string;
+  name: string;
+  description: string;
+  endpoint_url: string | null;
+  price_sats: number;
+  lightning_address: string;
+  usage_count: number;
+  verified: boolean;
+  pending_verification: boolean;
+  tags: string[];
+  owner_pubkey: string | null;
+  created_at: string;
+}
+
+export async function createAgent(
+  fields: Pick<AgentRow, "name" | "description" | "price_sats" | "lightning_address" | "tags"> & {
+    endpoint_url?: string;
+    owner_pubkey?: string;
+  },
+): Promise<AgentRow | null> {
+  const client = getClient();
+  if (!client) return null;
+  const { data, error } = await client
+    .from("agents")
+    .insert({
+      name: fields.name,
+      description: fields.description,
+      price_sats: fields.price_sats,
+      lightning_address: fields.lightning_address,
+      tags: fields.tags,
+      endpoint_url: fields.endpoint_url ?? null,
+      owner_pubkey: fields.owner_pubkey ?? null,
+    })
+    .select()
+    .single();
+  if (error) {
+    console.error("[supabase] insert agents failed", error.message);
+    return null;
+  }
+  return data as AgentRow;
+}
+
+export async function listAgents(tag?: string): Promise<AgentRow[]> {
+  const client = getClient();
+  if (!client) return [];
+  let q = client.from("agents").select("*").order("usage_count", { ascending: false });
+  if (tag) q = q.contains("tags", [tag]);
+  const { data, error } = await q;
+  if (error) {
+    console.error("[supabase] list agents failed", error.message);
+    return [];
+  }
+  return (data ?? []) as AgentRow[];
+}
+
+export async function getAgent(id: string): Promise<AgentRow | null> {
+  const client = getClient();
+  if (!client) return null;
+  const { data, error } = await client.from("agents").select("*").eq("id", id).single();
+  if (error) return null;
+  return data as AgentRow;
+}
+
+export async function incrementAgentUsage(id: string): Promise<void> {
+  const client = getClient();
+  if (!client) return;
+  const { data: row } = await client
+    .from("agents")
+    .select("usage_count, verified")
+    .eq("id", id)
+    .single();
+  if (!row) return;
+  const newCount = (row as AgentRow).usage_count + 1;
+  const update: Partial<AgentRow> = { usage_count: newCount };
+  if (newCount >= 10 && !(row as AgentRow).verified) update.pending_verification = true;
+  await client.from("agents").update(update).eq("id", id);
 }
 
 /**
