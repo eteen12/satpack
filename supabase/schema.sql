@@ -33,7 +33,8 @@ alter table tx_logs add constraint tx_logs_service_check
     'scrape-email',
     'validate-email',
     'scrape-contact',
-    'places-search'
+    'places-search',
+    'hire-agent'
   ));
 
 create index if not exists tx_logs_created_at_desc_idx
@@ -41,3 +42,21 @@ create index if not exists tx_logs_created_at_desc_idx
 
 create index if not exists tx_logs_service_idx
   on tx_logs (service);
+
+-- hire_invoices: tracks browser-initiated Lightning payments for the /hire page.
+-- Each row is created when the browser requests an invoice and marks the task.
+-- The `used` flag prevents replay attacks.
+create table if not exists hire_invoices (
+  id              bigint generated always as identity primary key,
+  payment_hash    text   not null unique,
+  checkout_id     text   not null,
+  task            text   not null,
+  used            boolean not null default false,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists hire_invoices_payment_hash_idx
+  on hire_invoices (payment_hash);
+
+create index if not exists hire_invoices_created_at_idx
+  on hire_invoices (created_at desc);

@@ -222,6 +222,7 @@ export async function runHireAgent(task: string, emit: Emit): Promise<void> {
       // Execute tool calls sequentially so progress streams in order
       for (const call of toolCalls) {
         if (Date.now() > deadline) break;
+        if (!("function" in call)) continue; // skip non-function tool calls
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(call.function.arguments) as Record<string, unknown>; } catch { /* empty */ }
         const { content, sats } = await execTool(call.function.name, args, emit);

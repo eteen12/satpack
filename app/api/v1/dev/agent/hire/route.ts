@@ -15,11 +15,10 @@ export async function POST(req: Request) {
 
   const { readable, writable } = new TransformStream<string, string>();
   const writer = writable.getWriter();
-  const encoder = new TextEncoder();
 
   function emit(event: AgentEvent) {
     const line = `data: ${JSON.stringify(event)}\n\n`;
-    writer.write(encoder.encode(line)).catch(() => {/* stream closed */});
+    writer.write(line).catch(() => {/* stream closed */});
   }
 
   runHireAgent(task, emit).finally(() => {

@@ -19,7 +19,8 @@ export type ServiceId =
   | "scrape-email"
   | "validate-email"
   | "scrape-contact"
-  | "places-search";
+  | "places-search"
+  | "hire-agent";
 
 export interface TxLogRow {
   id: number;
@@ -90,6 +91,45 @@ export async function logTx(args: {
     duration_ms: args.duration_ms,
   });
   if (error) console.error("[supabase] insert tx_logs failed", error.message);
+}
+
+// ── hire_invoices helpers ─────────────────────────────────────────────────────
+
+export interface HireInvoiceRow {
+  payment_hash: string;
+  checkout_id: string;
+  task: string;
+  used: boolean;
+}
+
+export async function insertHireInvoice(row: Omit<HireInvoiceRow, "used">): Promise<void> {
+  const client = getClient();
+  if (!client) return;
+  const { error } = await client.from("hire_invoices").insert(row);
+  if (error) console.error("[supabase] insert hire_invoices failed", error.message);
+}
+
+export async function getHireInvoice(paymentHash: string): Promise<HireInvoiceRow | null> {
+  const client = getClient();
+  if (!client) return null;
+  const { data, error } = await client
+    .from("hire_invoices")
+    .select("payment_hash, checkout_id, task, used")
+    .eq("payment_hash", paymentHash)
+    .single();
+  if (error) return null;
+  return data as HireInvoiceRow;
+}
+
+export async function markHireInvoiceUsed(paymentHash: string): Promise<boolean> {
+  const client = getClient();
+  if (!client) return false;
+  const { error } = await client
+    .from("hire_invoices")
+    .update({ used: true })
+    .eq("payment_hash", paymentHash)
+    .eq("used", false);
+  return !error;
 }
 
 /**
