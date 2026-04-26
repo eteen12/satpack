@@ -105,12 +105,20 @@ function TopBar() {
       <span className="text-sm text-foreground-muted">
         <span className="text-accent">🦞</span> satpack
       </span>
-      <a
-        href="/hire"
-        className="inline-flex items-center gap-1.5 rounded border border-[#00d4ff]/25 bg-[#00d4ff]/5 px-2.5 py-1 text-[11px] uppercase tracking-widest text-[#00d4ff] transition-colors hover:border-[#00d4ff]/40 hover:bg-[#00d4ff]/10"
-      >
-        hire agent →
-      </a>
+      <div className="flex items-center gap-4">
+        <a
+          href="/marketplace"
+          className="text-[11px] uppercase tracking-widest text-foreground-faint hover:text-foreground transition-colors"
+        >
+          marketplace
+        </a>
+        <a
+          href="/hire"
+          className="inline-flex items-center gap-1.5 rounded border border-[#00d4ff]/25 bg-[#00d4ff]/5 px-2.5 py-1 text-[11px] uppercase tracking-widest text-[#00d4ff] transition-colors hover:border-[#00d4ff]/40 hover:bg-[#00d4ff]/10"
+        >
+          hire agent →
+        </a>
+      </div>
     </div>
   );
 }
