@@ -12,8 +12,8 @@ export const maxDuration = 60;
 type AgentResult = { summary: string; data?: unknown };
 type Handler = (task: string) => Promise<AgentResult>;
 
-async function getJson(url: string, timeoutMs = 15_000): Promise<any> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+async function getJson(url: string, timeoutMs = 15_000, headers?: Record<string, string>): Promise<any> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers });
   if (!res.ok) throw new Error(`${new URL(url).hostname} returned ${res.status}`);
   return res.json();
 }
@@ -114,10 +114,23 @@ const whois: Handler = async (task) => {
   const domain = task.match(/([a-z0-9-]+\.)+[a-z]{2,}/i)?.[0]?.toLowerCase();
   if (!domain) throw new Error("no domain found in task");
 
+  const tld = domain.split(".").pop()!;
+  // rdap.org's redirect chain times out from Vercel for some TLDs; hit the
+  // big registries directly and keep rdap.org as the generic fallback
+  const rdapBases: Record<string, string> = {
+    com: "https://rdap.verisign.com/com/v1",
+    net: "https://rdap.verisign.com/net/v1",
+    org: "https://rdap.publicinterestregistry.org/rdap",
+  };
+  const rdapUrl = `${rdapBases[tld] ?? "https://rdap.org"}/domain/${domain}`;
+
   const [rdap, dns] = await Promise.all([
-    getJson(`https://rdap.org/domain/${domain}`).catch(() => null),
-    getJson(`https://cloudflare-dns.com/dns-query?name=${domain}&type=NS`, 10_000)
-      .catch(() => null),
+    getJson(rdapUrl, 12_000).catch(() => null),
+    getJson(
+      `https://cloudflare-dns.com/dns-query?name=${domain}&type=NS`,
+      10_000,
+      { accept: "application/dns-json" },
+    ).catch(() => null),
   ]);
 
   const events = Object.fromEntries(
